@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A desktop application template using **Tauri v2** (Rust backend) + **Solid.js** (frontend) + **TypeScript** + **Tailwindcss v3**. The package manager is **Bun**.
+A desktop application template using **Tauri v2** (Rust backend) + **Solid.js** (frontend) + **TypeScript** + **Tailwindcss v3** + **Kobalte Core**. The package manager is **Bun**.
 
 ## Commands
 
