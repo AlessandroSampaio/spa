@@ -1,3 +1,4 @@
+import { For } from "solid-js";
 import { Card } from "../components/ui/Card";
 import { StatCard } from "../components/ui/StatCard";
 import { CostHistoryChart } from "../components/ui/CostHistoryChart";
@@ -55,6 +56,14 @@ const mockProduct: ProductDashboard = {
   purchaseSuggestion: 250,
   lastPurchase: { date: "15/03/2026", price: 21.0, quantity: 300 },
   lastSale: { date: "11/04/2026", price: 28.9, quantity: 2 },
+  similares: [
+    { code: "001235", name: "Arroz Branco 2kg" },
+    { code: "001236", name: "Arroz Integral 5kg" },
+    { code: "001237", name: "Arroz Parboilizado 5kg" },
+    { code: "001238", name: "Arroz Arbóreo 1kg" },
+    { code: "001239", name: "Arroz Negro 1kg" },
+    { code: "001240", name: "Arroz Jasmine 5kg" },
+  ],
 };
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -71,7 +80,30 @@ export function Dashboard() {
   const p = mockProduct;
 
   return (
-    <div class="flex flex-col gap-4 p-4">
+    <div class="flex gap-4 p-4">
+      {/* ── Similares panel ───────────────────────────────────────────────── */}
+      <Card class="flex w-56 shrink-0 flex-col">
+        <p class="border-b border-gray-100 px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400 dark:border-white/10 dark:text-gray-500">
+          Similares
+        </p>
+        <ul class="flex flex-col overflow-y-auto">
+          <For each={p.similares}>
+            {(similar) => (
+              <li class="group flex cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5">
+                <span class="text-xs font-bold tracking-wider text-primary-500 dark:text-primary-400">
+                  {similar.code}
+                </span>
+                <span class="text-xs text-gray-700 dark:text-gray-300">
+                  {similar.name}
+                </span>
+              </li>
+            )}
+          </For>
+        </ul>
+      </Card>
+
+      {/* ── Main content ──────────────────────────────────────────────────── */}
+      <div class="flex min-w-0 flex-1 flex-col gap-4">
       {/* Product title */}
       <Card class="flex items-center gap-3 px-5 py-4">
         <span class="rounded-lg bg-primary-100 px-2.5 py-1 text-xs font-bold tracking-widest text-primary-600 dark:bg-primary-900/30 dark:text-primary-400">
@@ -125,6 +157,7 @@ export function Dashboard() {
 
       {/* Sales history — full width */}
       <SalesHistoryChart data={p.salesHistory} />
+      </div>
     </div>
   );
 }

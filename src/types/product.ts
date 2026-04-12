@@ -9,6 +9,11 @@ export interface LastTransaction {
   quantity: number;
 }
 
+export interface ProductSimilar {
+  code: string;
+  name: string;
+}
+
 export interface ProductDashboard {
   code: string;
   name: string;
@@ -20,4 +25,5 @@ export interface ProductDashboard {
   purchaseSuggestion: number;
   lastPurchase: LastTransaction;
   lastSale: LastTransaction;
+  similares: ProductSimilar[];
 }
