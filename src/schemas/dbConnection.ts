@@ -16,6 +16,8 @@ export const dbConnectionSchema = z.object({
     .string()
     .min(1, "Obrigatório")
     .regex(/\.fdb$/, "Deve ser um arquivo com extensão .fdb"),
+  username: z.string().min(1, "Obrigatório"),
+  password: z.string().min(1, "Obrigatório"),
 });
 
 export type DbConnectionForm = z.infer<typeof dbConnectionSchema>;
