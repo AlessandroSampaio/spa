@@ -2,6 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  /* ── Scrollbar — light mode ─────────────────────────────────────────────── */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #aec5eb #f3f4f6;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #f3f4f6;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #aec5eb;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #80a3de;
+  }
+
+  /* ── Scrollbar — dark mode ──────────────────────────────────────────────── */
+  .dark * {
+    scrollbar-color: #2a518e #1f2937;
+  }
+  .dark ::-webkit-scrollbar-track {
+    background: #1f2937;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: #2a518e;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #3d6ab5;
+  }
+}
+
 @layer utilities {
   .animate-overlay-in {
     animation: overlay-in 180ms ease-out forwards;
