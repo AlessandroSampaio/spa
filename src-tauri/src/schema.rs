@@ -10,3 +10,17 @@ diesel::table! {
         proprcvdavar -> Nullable<Double>,
     }
 }
+
+diesel::table! {
+    similares (procodsim) {
+        procodsim -> Text,
+        similaresdes -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    item_similares (procodsim, procod) {
+        procodsim -> Text,
+        procod -> Text,
+    }
+}
