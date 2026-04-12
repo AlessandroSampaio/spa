@@ -97,7 +97,7 @@ export function SettingsDialog() {
             relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center
             rounded-full border-2 border-transparent transition-colors duration-200
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2
-            dark:focus-visible:ring-offset-background-dark
+            dark:focus-visible:ring-primary-400 dark:focus-visible:ring-offset-background-dark
           "
           classList={{
             "bg-primary-500": theme() === "dark",
@@ -172,10 +172,10 @@ export function SettingsDialog() {
           disabled={form.submitting}
           class="
             mt-1 w-full rounded-md bg-primary-500 px-4 py-2 text-sm font-medium text-white
-            transition-colors hover:bg-primary-600 active:bg-primary-700
+            transition-colors hover:bg-primary-600 active:bg-primary-700 dark:hover:bg-primary-400
             disabled:opacity-50 disabled:cursor-not-allowed
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2
-            dark:focus-visible:ring-offset-background-dark
+            dark:focus-visible:ring-primary-400 dark:focus-visible:ring-offset-background-dark
           "
         >
           Salvar
