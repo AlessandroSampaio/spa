@@ -1,6 +1,6 @@
 mod db;
-mod schema;
 mod products;
+mod schema;
 mod similares;
 
 use std::sync::{Arc, OnceLock};
@@ -114,9 +114,25 @@ pub fn run() {
     // TauRPC's Router::merge() requires a Tokio runtime context.
     let handler = tauri::async_runtime::block_on(async {
         taurpc::Router::new()
-            .merge(ApiImpl { db: db_state.clone(), app_handle: app_handle.clone() }.into_handler())
-            .merge(ProductsImpl { db: db_state.clone() }.into_handler())
-            .merge(SimilaresImpl { db: db_state.clone() }.into_handler())
+            .merge(
+                ApiImpl {
+                    db: db_state.clone(),
+                    app_handle: app_handle.clone(),
+                }
+                .into_handler(),
+            )
+            .merge(
+                ProductsImpl {
+                    db: db_state.clone(),
+                }
+                .into_handler(),
+            )
+            .merge(
+                SimilaresImpl {
+                    db: db_state.clone(),
+                }
+                .into_handler(),
+            )
             .into_handler()
     });
 
