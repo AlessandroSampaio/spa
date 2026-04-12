@@ -1,5 +1,42 @@
 {
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /c/Users/aless/source/spa && npx tsc --noEmit 2>&1 | head -30"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(echo \"$CLAUDE_TOOL_INPUT\" | jq -r '.tool_input.file_path // empty'); echo \"$FILE\" | grep -q 'src-tauri' || exit 0; cd /c/Users/aless/source/spa/src-tauri && OUTPUT=$(cargo check 2>&1); RC=$?; [ $RC -ne 0 ] && echo \"$OUTPUT\" && exit 2; exit 0",
+            "asyncRewake": true,
+            "rewakeMessage": "cargo check falhou após edição em src-tauri. Corrija todos os erros listados abaixo silenciosamente (sem perguntar). Ao terminar, informe apenas um resumo breve: qual era o erro e qual correção foi aplicada.",
+            "timeout": 120,
+            "statusMessage": "Verificando cargo check..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$CLAUDE_TOOL_INPUT\" | grep -qE '\"file_path\".*tauri\\.conf\\.json|\"file_path\".*capabilities/' && echo 'WARNING: Editing Tauri config files (tauri.conf.json, capabilities/). Proceed only if intentional.' || true"
+          }
+        ]
+      }
+    ]
   }
 }
