@@ -1,7 +1,54 @@
-import { Dialog } from "../ui/Dialog";
+import { createForm, SubmitHandler, zodForm } from "@modular-forms/solid";
+import {
+  DbConnectionForm,
+  dbConnectionSchema,
+} from "../../schemas/dbConnection";
 import { theme, toggleTheme } from "../../stores/theme";
+import { Dialog } from "../ui/Dialog";
+import { Input } from "../ui/Input";
+
+const STORAGE_KEY = "db-connection";
+
+function loadSaved(): Partial<DbConnectionForm> {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+function FieldWrapper(props: { label: string; error?: string; children: any }) {
+  return (
+    <div class="flex flex-col gap-1">
+      <label class="text-xs font-medium text-gray-500 dark:text-gray-400">
+        {props.label}
+      </label>
+      {props.children}
+      {props.error && (
+        <span class="text-xs text-red-500 dark:text-red-400">
+          {props.error}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function SettingsDialog() {
+  const saved = loadSaved();
+
+  const [form, { Form, Field: FormField }] = createForm<DbConnectionForm>({
+    validate: zodForm(dbConnectionSchema),
+    initialValues: {
+      host: saved.host ?? "",
+      port: saved.port ?? "",
+      database: saved.database ?? "",
+    },
+  });
+
+  const handleSubmit: SubmitHandler<DbConnectionForm> = (values) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
+  };
+
   return (
     <Dialog
       title="Configurações"
@@ -33,15 +80,16 @@ export function SettingsDialog() {
         </button>
       }
     >
+      {/* Theme toggle */}
       <div class="flex items-center justify-between">
         <div>
-          <p class="text-sm font-medium text-gray-800 dark:text-gray-100">Tema</p>
+          <p class="text-sm font-medium text-gray-800 dark:text-gray-100">
+            Tema
+          </p>
           <p class="text-xs text-gray-400 dark:text-gray-500">
             {theme() === "dark" ? "Modo escuro ativo" : "Modo claro ativo"}
           </p>
         </div>
-
-        {/* Toggle switch */}
         <button
           onClick={toggleTheme}
           role="switch"
@@ -58,10 +106,7 @@ export function SettingsDialog() {
           }}
         >
           <span
-            class="
-              pointer-events-none inline-block h-4 w-4 rounded-full bg-white
-              shadow transition-transform duration-200
-            "
+            class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200"
             classList={{
               "translate-x-5": theme() === "dark",
               "translate-x-0": theme() === "light",
@@ -69,6 +114,74 @@ export function SettingsDialog() {
           />
         </button>
       </div>
+
+      {/* Divider */}
+      <div class="my-5 border-t border-gray-100 dark:border-white/10" />
+
+      {/* DB connection form */}
+      <p class="mb-4 text-sm font-medium text-gray-800 dark:text-gray-100">
+        Conexão com banco de dados
+      </p>
+
+      <Form onSubmit={handleSubmit} class="flex flex-col gap-4">
+        <FormField name="host">
+          {(field, props) => (
+            <FieldWrapper label="Host" error={field.error}>
+              <Input
+                {...props}
+                type="text"
+                placeholder="192.168.0.1"
+                value={field.value ?? ""}
+                variant={field.error ? "error" : "default"}
+              />
+            </FieldWrapper>
+          )}
+        </FormField>
+
+        <FormField name="port">
+          {(field, props) => (
+            <FieldWrapper label="Porta" error={field.error}>
+              <Input
+                {...props}
+                type="text"
+                inputmode="numeric"
+                maxlength="4"
+                placeholder="3050"
+                value={field.value ?? ""}
+                variant={field.error ? "error" : "default"}
+              />
+            </FieldWrapper>
+          )}
+        </FormField>
+
+        <FormField name="database">
+          {(field, props) => (
+            <FieldWrapper label="Database" error={field.error}>
+              <Input
+                {...props}
+                type="text"
+                placeholder="/var/data/banco.fdb"
+                value={field.value ?? ""}
+                variant={field.error ? "error" : "default"}
+              />
+            </FieldWrapper>
+          )}
+        </FormField>
+
+        <button
+          type="submit"
+          disabled={form.submitting}
+          class="
+            mt-1 w-full rounded-md bg-primary-500 px-4 py-2 text-sm font-medium text-white
+            transition-colors hover:bg-primary-600 active:bg-primary-700
+            disabled:opacity-50 disabled:cursor-not-allowed
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2
+            dark:focus-visible:ring-offset-background-dark
+          "
+        >
+          Salvar
+        </button>
+      </Form>
     </Dialog>
   );
 }
