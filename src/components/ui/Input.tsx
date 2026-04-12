@@ -1,8 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import { ComponentProps, splitProps } from "solid-js";
+import { ComponentProps, JSX, Show, splitProps } from "solid-js";
 
 const inputVariants = cva(
-  // Base
   `w-full rounded-md border px-3 py-2 text-sm outline-none
    transition-colors placeholder-gray-400 dark:placeholder-gray-600
    disabled:cursor-not-allowed disabled:opacity-50`,
@@ -49,20 +48,55 @@ const inputVariants = cva(
 );
 
 export type InputVariant = NonNullable<VariantProps<typeof inputVariants>["variant"]>;
+export type IconPosition = "left" | "right";
 
 export interface InputProps
   extends Omit<ComponentProps<"input">, "class">,
     VariantProps<typeof inputVariants> {
   class?: string;
+  icon?: JSX.Element;
+  iconPosition?: IconPosition;
 }
 
 export function Input(props: InputProps) {
-  const [local, rest] = splitProps(props, ["variant", "class"]);
+  const [local, rest] = splitProps(props, [
+    "variant",
+    "class",
+    "icon",
+    "iconPosition",
+  ]);
+
+  const position = () => local.iconPosition ?? "right";
+
+  const baseInputClass = () =>
+    inputVariants({
+      variant: local.variant,
+      class: [
+        local.icon ? "" : local.class,
+        local.icon && position() === "right" ? "pr-9" : "",
+        local.icon && position() === "left" ? "pl-9" : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    });
 
   return (
-    <input
-      {...rest}
-      class={inputVariants({ variant: local.variant, class: local.class })}
-    />
+    <Show
+      when={local.icon}
+      fallback={<input {...rest} class={baseInputClass()} />}
+    >
+      <div class={`relative w-full ${local.class ?? ""}`}>
+        <input {...rest} class={baseInputClass()} />
+        <span
+          class="pointer-events-none absolute top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+          classList={{
+            "right-3": position() === "right",
+            "left-3": position() === "left",
+          }}
+        >
+          {local.icon}
+        </span>
+      </div>
+    </Show>
   );
 }
