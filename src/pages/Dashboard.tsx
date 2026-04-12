@@ -1,11 +1,11 @@
-import { createResource, For, Show } from "solid-js";
+import { createEffect, createResource, createSignal, For, Show } from "solid-js";
 import { Card } from "../components/ui/Card";
 import { StatCard } from "../components/ui/StatCard";
 import { CostHistoryChart } from "../components/ui/CostHistoryChart";
 import { SalesHistoryChart } from "../components/ui/SalesHistoryChart";
 import { TransactionCard } from "../components/ui/TransactionCard";
 import { ProductDashboard } from "../types/product";
-import { selectedProduct } from "../stores/selectedProduct";
+import { selectedProduct, setSelectedProduct } from "../stores/selectedProduct";
 import { taurpc } from "../stores/taurpc";
 
 // ── Icons ────────────────────────────────────────────────────────────────────
@@ -81,10 +81,29 @@ const fmtNumber = (v: number, decimals = 1) =>
 export function Dashboard() {
   const p = mockProduct;
 
+  const [similaresProcod, setSimilaresProcod] = createSignal<string | null>(null);
+
   const [similares] = createResource(
-    () => selectedProduct()?.procod ?? null,
+    similaresProcod,
     (procod) => taurpc.similares.get_by_product(procod),
   );
+
+  // Só dispara novo fetch quando o produto selecionado NÃO pertence ao grupo atual.
+  // Clicar num similar não atualiza similaresProcod pois ele já está na lista.
+  createEffect(() => {
+    const product = selectedProduct();
+    if (!product) {
+      setSimilaresProcod(null);
+      return;
+    }
+    const currentGroup = similares();
+    const isInCurrentGroup = currentGroup?.similares.some(
+      (s) => s.procod === product.procod,
+    );
+    if (!isInCurrentGroup) {
+      setSimilaresProcod(product.procod);
+    }
+  });
 
   return (
     <div class="flex gap-4 p-4">
@@ -117,7 +136,10 @@ export function Dashboard() {
             <ul class="flex flex-col overflow-y-auto">
               <For each={group().similares}>
                 {(similar) => (
-                  <li class="group flex cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5">
+                  <li
+                    class="group flex cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
+                    onClick={() => setSelectedProduct(similar)}
+                  >
                     <span class="text-xs font-bold tracking-wider text-primary-500 dark:text-primary-400">
                       {similar.procod.trim()}
                     </span>
