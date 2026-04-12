@@ -1,21 +1,15 @@
-import { createForm, SubmitHandler, zodForm } from "@modular-forms/solid";
+import { createForm, reset, SubmitHandler, zodForm } from "@modular-forms/solid";
+import { createSignal, onMount } from "solid-js";
 import {
   DbConnectionForm,
   dbConnectionSchema,
 } from "../../schemas/dbConnection";
+import { taurpc } from "../../stores/taurpc";
 import { theme, toggleTheme } from "../../stores/theme";
 import { Dialog } from "../ui/Dialog";
 import { Input } from "../ui/Input";
 
-const STORAGE_KEY = "db-connection";
-
-function loadSaved(): Partial<DbConnectionForm> {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
-  } catch {
-    return {};
-  }
-}
+type Status = "idle" | "saving" | "success" | "error";
 
 function FieldWrapper(props: { label: string; error?: string; children: any }) {
   return (
@@ -34,19 +28,46 @@ function FieldWrapper(props: { label: string; error?: string; children: any }) {
 }
 
 export function SettingsDialog() {
-  const saved = loadSaved();
-
   const [form, { Form, Field: FormField }] = createForm<DbConnectionForm>({
     validate: zodForm(dbConnectionSchema),
     initialValues: {
-      host: saved.host ?? "",
-      port: saved.port ?? "",
-      database: saved.database ?? "",
+      host: "",
+      port: "",
+      database: "",
+      username: "",
+      password: "",
     },
   });
 
-  const handleSubmit: SubmitHandler<DbConnectionForm> = (values) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
+  const [status, setStatus] = createSignal<Status>("idle");
+  const [statusMsg, setStatusMsg] = createSignal("");
+
+  // Load persisted config from file on mount and pre-fill the form.
+  onMount(async () => {
+    try {
+      const saved = await (taurpc as any).load_connection_config();
+      if (saved) {
+        reset(form, { initialValues: saved as DbConnectionForm });
+      }
+    } catch {
+      // No saved config yet — form stays empty.
+    }
+  });
+
+  const handleSubmit: SubmitHandler<DbConnectionForm> = async (values) => {
+    setStatus("saving");
+    setStatusMsg("");
+    try {
+      // Persist config to the OS app-data directory.
+      await (taurpc as any).save_connection_config(values);
+      // Establish connection with the saved values.
+      await taurpc.connect_db(values);
+      setStatus("success");
+      setStatusMsg("Conectado com sucesso.");
+    } catch (err) {
+      setStatus("error");
+      setStatusMsg(String(err));
+    }
   };
 
   return (
@@ -167,6 +188,48 @@ export function SettingsDialog() {
           )}
         </FormField>
 
+        <FormField name="username">
+          {(field, props) => (
+            <FieldWrapper label="Usuário" error={field.error}>
+              <Input
+                {...props}
+                type="text"
+                placeholder="SYSDBA"
+                value={field.value ?? ""}
+                variant={field.error ? "error" : "default"}
+              />
+            </FieldWrapper>
+          )}
+        </FormField>
+
+        <FormField name="password">
+          {(field, props) => (
+            <FieldWrapper label="Senha" error={field.error}>
+              <Input
+                {...props}
+                type="password"
+                placeholder="••••••••"
+                value={field.value ?? ""}
+                variant={field.error ? "error" : "default"}
+              />
+            </FieldWrapper>
+          )}
+        </FormField>
+
+        {/* Status feedback */}
+        {status() !== "idle" && (
+          <p
+            class="text-xs"
+            classList={{
+              "text-gray-400 dark:text-gray-500": status() === "saving",
+              "text-green-600 dark:text-green-400": status() === "success",
+              "text-red-500 dark:text-red-400": status() === "error",
+            }}
+          >
+            {status() === "saving" ? "Conectando…" : statusMsg()}
+          </p>
+        )}
+
         <button
           type="submit"
           disabled={form.submitting}
@@ -178,7 +241,7 @@ export function SettingsDialog() {
             dark:focus-visible:ring-primary-400 dark:focus-visible:ring-offset-background-dark
           "
         >
-          Salvar
+          Salvar e conectar
         </button>
       </Form>
     </Dialog>
