@@ -27,7 +27,7 @@ export function Dialog(props: DialogProps) {
   ]);
 
   return (
-    <KDialog {...rootProps}>
+    <KDialog.Root {...rootProps}>
       <Show when={local.trigger}>
         <KDialog.Trigger as="div">{local.trigger}</KDialog.Trigger>
       </Show>
@@ -109,6 +109,6 @@ export function Dialog(props: DialogProps) {
           </KDialog.CloseButton>
         </KDialog.Content>
       </KDialog.Portal>
-    </KDialog>
+    </KDialog.Root>
   );
 }
