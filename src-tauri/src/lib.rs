@@ -2,6 +2,7 @@ mod db;
 mod products;
 mod schema;
 mod similares;
+mod vendas;
 
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
@@ -11,6 +12,7 @@ use tauri::Manager;
 use db::{build_pool, ConnectionConfig, DbPool};
 use products::{ProductsApi, ProductsImpl};
 use similares::{SimilaresApi, SimilaresImpl};
+use vendas::{VendasApi, VendasImpl};
 
 type DbState = Arc<Mutex<Option<DbPool>>>;
 type AppHandleState = Arc<OnceLock<tauri::AppHandle>>;
@@ -129,6 +131,12 @@ pub fn run() {
             )
             .merge(
                 SimilaresImpl {
+                    db: db_state.clone(),
+                }
+                .into_handler(),
+            )
+            .merge(
+                VendasImpl {
                     db: db_state.clone(),
                 }
                 .into_handler(),

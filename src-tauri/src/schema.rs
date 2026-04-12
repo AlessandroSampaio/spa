@@ -24,3 +24,19 @@ diesel::table! {
         procod -> Text,
     }
 }
+
+diesel::table! {
+    use diesel::sql_types::*;
+
+    itevda (id) {
+        id -> Integer,
+        trndat -> Timestamp,
+        procod -> Nullable<Text>,
+        itvqtdvda -> Nullable<Double>,
+        itvvlruni -> Nullable<Double>,
+        itvvlrdcn -> Nullable<Double>,
+        itvvlracr -> Nullable<Double>,
+        itvvlrtot -> Nullable<Double>,
+        itvprccst -> Nullable<Double>,
+    }
+}

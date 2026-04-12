@@ -1,4 +1,4 @@
-import { createEffect, createResource, createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js";
 import { Card } from "../components/ui/Card";
 import { StatCard } from "../components/ui/StatCard";
 import { CostHistoryChart } from "../components/ui/CostHistoryChart";
@@ -78,8 +78,42 @@ const fmtNumber = (v: number, decimals = 1) =>
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// Compute how many days the 6-month window spans (varies by month lengths).
+const PERIOD_DAYS = (() => {
+  const today = new Date();
+  const cutoff = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate());
+  return Math.ceil((today.getTime() - cutoff.getTime()) / (1000 * 60 * 60 * 24));
+})();
+
 export function Dashboard() {
   const p = mockProduct;
+
+  // ── Vendas resource ───────────────────────────────────────────────────────
+  const [vendas] = createResource(
+    () => selectedProduct()?.procod ?? null,
+    (procod) => taurpc.vendas.get_resumo_by_product(procod),
+  );
+
+  // Receita média mensal dos últimos 6 meses
+  const avgMonthlyRevenue = createMemo(() =>
+    vendas()?.total_venda != null
+      ? vendas()!.total_venda / 6
+      : p.avgSalesLast6Months,
+  );
+
+  // Média diária de unidades vendidas = quantidade total ÷ dias decorridos
+  const avgDailySalesQty = createMemo(() =>
+    vendas()?.quantidade_vendida != null
+      ? vendas()!.quantidade_vendida / PERIOD_DAYS
+      : p.avgDailySales,
+  );
+
+  // Histórico mensal para o gráfico de barras
+  const salesChartData = createMemo(() => {
+    const data = vendas();
+    if (!data) return p.salesHistory;
+    return data.venda_media_mensal.map((d) => ({ month: d.mes, value: d.quantidade }));
+  });
 
   const [similaresProcod, setSimilaresProcod] = createSignal<string | null>(null);
 
@@ -200,7 +234,7 @@ export function Dashboard() {
       <div class="grid grid-cols-4 gap-4">
         <StatCard
           label="Venda Média (6 meses)"
-          value={fmtCurrency(p.avgSalesLast6Months)}
+          value={fmtCurrency(avgMonthlyRevenue())}
           sublabel="receita média mensal"
           icon={<IconSales />}
           accent="blue"
@@ -214,8 +248,8 @@ export function Dashboard() {
         />
         <StatCard
           label="Venda Média Diária"
-          value={`${fmtNumber(p.avgDailySales)} un/dia`}
-          sublabel="últimos 30 dias"
+          value={`${fmtNumber(avgDailySalesQty())} un/dia`}
+          sublabel="últimos 6 meses"
           icon={<IconCalendar />}
           accent="purple"
         />
@@ -238,7 +272,7 @@ export function Dashboard() {
       </div>
 
       {/* Sales history — full width */}
-      <SalesHistoryChart data={p.salesHistory} />
+      <SalesHistoryChart data={salesChartData()} />
       </div>
     </div>
   );

@@ -10,9 +10,13 @@ export type Product = { procod: string; prodes: string | null; proprccst: number
 
 export type ProductsFilter = { search: string | null; limit: number | null; offset: number | null }
 
+export type ResumoVendas = { produto_id: string; quantidade_vendida: number; total_venda: number; total_custo: number; venda_media_mensal: VendaMediaMensal[] }
+
 export type SimilaresGroup = { id: string; descricao: string | null; similares: Product[] }
 
-const ARGS_MAP = { '':'{"connect_db":["args"],"disconnect_db":[],"hello_world":[],"is_connected":[],"load_connection_config":[],"save_connection_config":["args"]}', 'products':'{"get_all":["filter"],"get_by_code":["procod"]}', 'similares':'{"get_by_product":["procod"]}' }
+export type VendaMediaMensal = { mes: string; quantidade: number }
+
+const ARGS_MAP = { '':'{"connect_db":["args"],"disconnect_db":[],"hello_world":[],"is_connected":[],"load_connection_config":[],"save_connection_config":["args"]}', 'products':'{"get_all":["filter"],"get_by_code":["procod"]}', 'similares':'{"get_by_product":["procod"]}', 'vendas':'{"get_resumo_by_product":["procod"]}' }
 export type Router = { "": {connect_db: (args: DbConnectionArgs) => Promise<null>, 
 disconnect_db: () => Promise<void>, 
 hello_world: () => Promise<string>, 
@@ -21,7 +25,8 @@ load_connection_config: () => Promise<DbConnectionArgs | null>,
 save_connection_config: (args: DbConnectionArgs) => Promise<null>},
 "products": {get_all: (filter: ProductsFilter) => Promise<Product[]>, 
 get_by_code: (procod: string) => Promise<Product | null>},
-"similares": {get_by_product: (procod: string) => Promise<SimilaresGroup | null>} };
+"similares": {get_by_product: (procod: string) => Promise<SimilaresGroup | null>},
+"vendas": {get_resumo_by_product: (procod: string) => Promise<ResumoVendas>} };
 
 
 export const createTauRPCProxy = () => createProxy<Router>(ARGS_MAP)
