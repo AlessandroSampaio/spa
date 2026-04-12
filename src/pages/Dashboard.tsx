@@ -1,10 +1,12 @@
-import { For } from "solid-js";
+import { createResource, For, Show } from "solid-js";
 import { Card } from "../components/ui/Card";
 import { StatCard } from "../components/ui/StatCard";
 import { CostHistoryChart } from "../components/ui/CostHistoryChart";
 import { SalesHistoryChart } from "../components/ui/SalesHistoryChart";
 import { TransactionCard } from "../components/ui/TransactionCard";
 import { ProductDashboard } from "../types/product";
+import { selectedProduct } from "../stores/selectedProduct";
+import { taurpc } from "../stores/taurpc";
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 
@@ -79,6 +81,11 @@ const fmtNumber = (v: number, decimals = 1) =>
 export function Dashboard() {
   const p = mockProduct;
 
+  const [similares] = createResource(
+    () => selectedProduct()?.procod ?? null,
+    (procod) => taurpc.similares.get_by_product(procod),
+  );
+
   return (
     <div class="flex gap-4 p-4">
       {/* ── Similares panel ───────────────────────────────────────────────── */}
@@ -86,32 +93,85 @@ export function Dashboard() {
         <p class="border-b border-gray-100 px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400 dark:border-white/10 dark:text-gray-500">
           Similares
         </p>
-        <ul class="flex flex-col overflow-y-auto">
-          <For each={p.similares}>
-            {(similar) => (
-              <li class="group flex cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5">
-                <span class="text-xs font-bold tracking-wider text-primary-500 dark:text-primary-400">
-                  {similar.code}
-                </span>
-                <span class="text-xs text-gray-700 dark:text-gray-300">
-                  {similar.name}
-                </span>
-              </li>
-            )}
-          </For>
-        </ul>
+
+        <Show when={!selectedProduct()}>
+          <p class="px-4 py-3 text-xs text-gray-400 dark:text-gray-500">
+            Selecione um produto para ver similares.
+          </p>
+        </Show>
+
+        <Show when={selectedProduct() && similares.loading}>
+          <p class="px-4 py-3 text-xs text-gray-400 dark:text-gray-500">
+            Carregando…
+          </p>
+        </Show>
+
+        <Show when={selectedProduct() && !similares.loading && similares() === null}>
+          <p class="px-4 py-3 text-xs text-gray-400 dark:text-gray-500">
+            Produto não possui similares associados.
+          </p>
+        </Show>
+
+        <Show when={similares()}>
+          {(group) => (
+            <ul class="flex flex-col overflow-y-auto">
+              <For each={group().similares}>
+                {(similar) => (
+                  <li class="group flex cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5">
+                    <span class="text-xs font-bold tracking-wider text-primary-500 dark:text-primary-400">
+                      {similar.procod.trim()}
+                    </span>
+                    <span class="text-xs text-gray-700 dark:text-gray-300">
+                      {similar.prodes?.trim() ?? "—"}
+                    </span>
+                  </li>
+                )}
+              </For>
+            </ul>
+          )}
+        </Show>
       </Card>
 
       {/* ── Main content ──────────────────────────────────────────────────── */}
       <div class="flex min-w-0 flex-1 flex-col gap-4">
-      {/* Product title */}
+      {/* Product title — driven by search selection */}
       <Card class="flex items-center gap-3 px-5 py-4">
-        <span class="rounded-lg bg-primary-100 px-2.5 py-1 text-xs font-bold tracking-widest text-primary-600 dark:bg-primary-900/30 dark:text-primary-400">
-          {p.code}
-        </span>
-        <span class="text-base font-semibold text-gray-800 dark:text-gray-100">
-          {p.name}
-        </span>
+        <Show
+          when={selectedProduct()}
+          fallback={
+            <span class="text-sm text-gray-400 dark:text-gray-500">
+              Pesquise e selecione um produto na barra acima
+            </span>
+          }
+        >
+          {(product) => (
+            <>
+              <span class="rounded-lg bg-primary-100 px-2.5 py-1 font-mono text-xs font-bold tracking-widest text-primary-600 dark:bg-primary-900/30 dark:text-primary-400">
+                {product().procod.trim()}
+              </span>
+              <span class="text-base font-semibold text-gray-800 dark:text-gray-100">
+                {product().prodes?.trim() ?? "—"}
+              </span>
+              <span class="ml-auto text-xs text-gray-400 dark:text-gray-500">
+                Custo{" "}
+                <span class="font-medium text-gray-600 dark:text-gray-300">
+                  {new Intl.NumberFormat("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  }).format(product().proprccst)}
+                </span>
+                {" · "}
+                Venda{" "}
+                <span class="font-medium text-gray-600 dark:text-gray-300">
+                  {new Intl.NumberFormat("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  }).format(product().proprcvdavar)}
+                </span>
+              </span>
+            </>
+          )}
+        </Show>
       </Card>
 
       {/* Stat cards */}
