@@ -2,6 +2,7 @@ import "./stores/theme";
 import { Header } from "./components/ui/Header";
 import { Input } from "./components/ui/Input";
 import { SettingsDialog } from "./components/forms/SettingsDialog";
+import { Dashboard } from "./pages/Dashboard";
 
 const SearchIcon = () => (
   <svg
@@ -24,13 +25,16 @@ function App() {
   return (
     <div class="flex h-screen w-full flex-col bg-background-light dark:bg-background-dark">
       <Header title="SPA - Analise de Produtos" actions={<SettingsDialog />} />
-      <main class="flex-1 p-4">
-        <Input
-          type="search"
-          placeholder="Pesquisar..."
-          icon={<SearchIcon />}
-          class="w-full"
-        />
+      <main class="flex-1 overflow-y-auto">
+        <div class="p-4 pb-2">
+          <Input
+            type="search"
+            placeholder="Pesquisar produto..."
+            icon={<SearchIcon />}
+            class="w-full"
+          />
+        </div>
+        <Dashboard />
       </main>
     </div>
   );
