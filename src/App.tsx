@@ -1,27 +1,11 @@
 import "./stores/theme";
 import { onMount } from "solid-js";
 import { Header } from "./components/ui/Header";
-import { Input } from "./components/ui/Input";
+import { ProductSearch } from "./components/ui/ProductSearch";
 import { SettingsDialog } from "./components/forms/SettingsDialog";
 import { Dashboard } from "./pages/Dashboard";
 import { taurpc } from "./stores/taurpc";
 
-const SearchIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
 
 function App() {
   // Auto-connect on startup using the last persisted configuration.
@@ -42,12 +26,7 @@ function App() {
       <Header title="SPA - Analise de Produtos" actions={<SettingsDialog />} />
       <main class="flex-1 overflow-y-auto">
         <div class="p-4 pb-2">
-          <Input
-            type="search"
-            placeholder="Pesquisar produto..."
-            icon={<SearchIcon />}
-            class="w-full"
-          />
+          <ProductSearch />
         </div>
         <Dashboard />
       </main>
