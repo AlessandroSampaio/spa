@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
-use diesel::sql_types::{Double, Nullable, Timestamp};
+use diesel::prelude::*;
+use diesel::sql_types::*;
 
 // ── IPC types ─────────────────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@ import { batch, createEffect, createMemo, createResource, createSignal, For, onM
 import type { SimilarProduct } from "../bindings";
 import { Card } from "../components/ui/Card";
 import { StatCard } from "../components/ui/StatCard";
-import { CostHistoryChart } from "../components/ui/CostHistoryChart";
+import { EntriesHistoryChart } from "../components/ui/EntriesHistoryChart";
 import { SalesHistoryChart } from "../components/ui/SalesHistoryChart";
 import { TransactionCard } from "../components/ui/TransactionCard";
 import { selectedProduct, setSelectedProduct } from "../stores/selectedProduct";
@@ -93,6 +93,36 @@ export function Dashboard() {
     () => selectedProduct()?.procod ?? null,
     (procod) => taurpc.stock.get_by_product(procod),
   );
+
+  // ── Entries resource ──────────────────────────────────────────────────────
+  const [entries] = createResource(
+    () => selectedProduct()?.procod ?? null,
+    (procod) => taurpc.entries.get_summary_by_product(procod),
+  );
+
+  const avgMonthlyPurchaseValue = createMemo(() =>
+    entries()?.total_value != null ? entries()!.total_value / 6 : null,
+  );
+
+  const entriesChartData = createMemo(() =>
+    entries()?.monthly_entries.map((d) => ({ month: d.month, value: d.quantity })) ?? [],
+  );
+
+  // Dias de estoque restante baseado no giro diário.
+  const daysOfStock = createMemo(() => {
+    const qty = stock()?.quantity;
+    const daily = avgDailySalesQty();
+    if (qty == null || daily == null || daily === 0) return null;
+    return Math.floor(qty / daily);
+  });
+
+  // Sugestão de compra: quantidade para cobrir 30 dias, descontando estoque atual.
+  const purchaseSuggestion = createMemo(() => {
+    const daily = avgDailySalesQty();
+    const qty = stock()?.quantity;
+    if (daily == null || qty == null) return null;
+    return Math.max(0, Math.ceil(daily * 30 - qty));
+  });
 
   // ── Similar resource ──────────────────────────────────────────────────────
   const [similarProcod, setSimilarProcod] = createSignal<string | null>(null);
@@ -296,7 +326,7 @@ export function Dashboard() {
           </Show>
         </Card>
 
-        {/* Stat cards */}
+        {/* Stat cards — vendas */}
         <div class="grid grid-cols-4 gap-4">
           <StatCard
             label="Venda Média (6 meses)"
@@ -321,17 +351,54 @@ export function Dashboard() {
           />
           <StatCard
             label="Sugestão de Compra"
-            value="—"
-            sublabel="baseado no giro atual"
+            value={purchaseSuggestion() != null ? `${fmtNumber(purchaseSuggestion()!, 0)} un` : "—"}
+            sublabel="cobertura de 30 dias"
             icon={<IconCart />}
             accent="amber"
+          />
+        </div>
+
+        {/* Stat cards — compras */}
+        <div class="grid grid-cols-4 gap-4">
+          <StatCard
+            label="Total Comprado (6 meses)"
+            value={entries()?.total_value != null ? fmtCurrency(entries()!.total_value) : "—"}
+            sublabel="valor total de entradas"
+            icon={<IconCart />}
+            accent="amber"
+          />
+          <StatCard
+            label="Qtd Comprada (6 meses)"
+            value={entries()?.quantity_purchased != null ? `${fmtNumber(entries()!.quantity_purchased, 0)} un` : "—"}
+            sublabel="unidades recebidas"
+            icon={<IconBox />}
+            accent="purple"
+          />
+          <StatCard
+            label="Compra Média Mensal"
+            value={avgMonthlyPurchaseValue() != null ? fmtCurrency(avgMonthlyPurchaseValue()!) : "—"}
+            sublabel="gasto médio em compras"
+            icon={<IconSales />}
+            accent="blue"
+          />
+          <StatCard
+            label="Dias de Estoque"
+            value={daysOfStock() != null ? `${daysOfStock()} dias` : "—"}
+            sublabel="cobertura com giro atual"
+            icon={<IconCalendar />}
+            accent="green"
           />
         </div>
 
         {/* Charts + transactions */}
         <div class="grid grid-cols-4 gap-4">
           <div class="col-span-2">
-            <NoData label="Histórico de Custo — últimos 6 meses" class="h-full" />
+            <Show
+              when={entriesChartData().length > 0}
+              fallback={<NoData label="Compras por Mês — últimos 6 meses" class="h-full" />}
+            >
+              <EntriesHistoryChart data={entriesChartData()} />
+            </Show>
           </div>
           <NoData label="Última Compra" />
           <NoData label="Última Venda" />

@@ -3,8 +3,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use chrono::Datelike;
-use diesel::{RunQueryDsl, sql_query};
 use diesel::sql_types::{Text, Timestamp};
+use diesel::{sql_query, RunQueryDsl};
 
 use super::models::{EntriesSummary, EntryItemRow, MonthlyEntries};
 use crate::db::DbPool;
