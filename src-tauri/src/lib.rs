@@ -28,6 +28,12 @@ struct DbConnectionArgs {
     password: String,
 }
 
+#[taurpc::ipc_type]
+struct AppPreferences {
+    sort_field: String,
+    sort_dir: String,
+}
+
 #[taurpc::procedures(export_to = "../src/bindings.ts")]
 trait Api {
     async fn hello_world() -> String;
@@ -41,6 +47,10 @@ trait Api {
     async fn save_connection_config(args: DbConnectionArgs) -> Result<(), String>;
 
     async fn load_connection_config() -> Result<Option<DbConnectionArgs>, String>;
+
+    async fn save_preferences(prefs: AppPreferences) -> Result<(), String>;
+
+    async fn load_preferences() -> Result<Option<AppPreferences>, String>;
 }
 
 #[derive(Clone)]
@@ -105,6 +115,31 @@ impl Api for ApiImpl {
         let json = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
         let config: DbConnectionArgs = serde_json::from_str(&json).map_err(|e| e.to_string())?;
         Ok(Some(config))
+    }
+
+    async fn save_preferences(self, prefs: AppPreferences) -> Result<(), String> {
+        let app = self.app_handle.get().ok_or("AppHandle não disponível")?;
+        let config_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+        let path = config_dir.join("preferences.json");
+        let json = serde_json::to_string_pretty(&prefs).map_err(|e| e.to_string())?;
+        std::fs::write(&path, json).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    async fn load_preferences(self) -> Result<Option<AppPreferences>, String> {
+        let app = self.app_handle.get().ok_or("AppHandle não disponível")?;
+        let path = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| e.to_string())?
+            .join("preferences.json");
+        if !path.exists() {
+            return Ok(None);
+        }
+        let json = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let prefs: AppPreferences = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+        Ok(Some(prefs))
     }
 }
 

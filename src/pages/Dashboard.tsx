@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js";
+import { batch, createEffect, createMemo, createResource, createSignal, For, onMount, Show } from "solid-js";
 import type { SimilarProduct } from "../bindings";
 import { Card } from "../components/ui/Card";
 import { StatCard } from "../components/ui/StatCard";
@@ -108,6 +108,26 @@ export function Dashboard() {
 
   const [sortField, setSortField] = createSignal<SortField>("code");
   const [sortDir,   setSortDir]   = createSignal<SortDir>("asc");
+
+  // Carrega preferências salvas na inicialização.
+  const [prefsLoaded, setPrefsLoaded] = createSignal(false);
+
+  onMount(async () => {
+    const prefs = await taurpc.load_preferences();
+    if (prefs) {
+      batch(() => {
+        setSortField(prefs.sort_field as SortField);
+        setSortDir(prefs.sort_dir as SortDir);
+      });
+    }
+    setPrefsLoaded(true);
+  });
+
+  // Persiste automaticamente quando o usuário muda o sort (aguarda o carregamento inicial).
+  createEffect(() => {
+    if (!prefsLoaded()) return;
+    taurpc.save_preferences({ sort_field: sortField(), sort_dir: sortDir() });
+  });
 
   const sortedProducts = createMemo<SimilarProduct[]>(() => {
     const group = similar();
