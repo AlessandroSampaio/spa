@@ -1,6 +1,7 @@
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { Product } from "../../bindings";
 import { setSelectedProduct } from "../../stores/selectedProduct";
+import { proforlinFilter } from "../../stores/proforlinFilter";
 import { taurpc } from "../../stores/taurpc";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -78,10 +79,12 @@ export function ProductSearch() {
     }
     setLoading(true);
     try {
+      const f = proforlinFilter();
       const data = await taurpc.products.get_all({
         search: text,
         limit: 10,
         offset: 0,
+        proforlin: f === "ambos" ? null : f,
       });
       setResults(data);
       setIsOpen(data.length > 0);
