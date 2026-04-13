@@ -45,23 +45,47 @@ impl ProductsApi for ProductsImpl {
             let limit = filter.limit.unwrap_or(100).min(500) as i64;
             let offset = filter.offset.unwrap_or(0) as i64;
 
-            let mut query = produto.select(ProductRow::as_select()).into_boxed();
-
-            if let Some(search) = filter.search {
-                let pattern = format!("%{}%", search.to_uppercase());
-                query = query.filter(prodes.like(pattern));
-            }
-
-            if let Some(fora_de_linha) = filter.proforlin {
-                query = query.filter(proforlin.eq(fora_de_linha));
-            }
-
-            let rows: Vec<ProductRow> = query
-                .order(prodes.asc())
-                .limit(limit)
-                .offset(offset)
-                .load(&mut *conn)
-                .map_err(|e: diesel::result::Error| e.to_string())?;
+            // Diesel 2.0 + SelectBy doesn't support into_boxed(); enumerate combos.
+            let rows: Vec<ProductRow> = match (filter.search, filter.proforlin) {
+                (Some(search), Some(fora)) => {
+                    let pattern = format!("%{}%", search.to_uppercase());
+                    produto
+                        .select(ProductRow::as_select())
+                        .filter(prodes.like(pattern))
+                        .filter(proforlin.eq(fora))
+                        .order(prodes.asc())
+                        .limit(limit)
+                        .offset(offset)
+                        .load(&mut *conn)
+                        .map_err(|e: diesel::result::Error| e.to_string())?
+                }
+                (Some(search), None) => {
+                    let pattern = format!("%{}%", search.to_uppercase());
+                    produto
+                        .select(ProductRow::as_select())
+                        .filter(prodes.like(pattern))
+                        .order(prodes.asc())
+                        .limit(limit)
+                        .offset(offset)
+                        .load(&mut *conn)
+                        .map_err(|e: diesel::result::Error| e.to_string())?
+                }
+                (None, Some(fora)) => produto
+                    .select(ProductRow::as_select())
+                    .filter(proforlin.eq(fora))
+                    .order(prodes.asc())
+                    .limit(limit)
+                    .offset(offset)
+                    .load(&mut *conn)
+                    .map_err(|e: diesel::result::Error| e.to_string())?,
+                (None, None) => produto
+                    .select(ProductRow::as_select())
+                    .order(prodes.asc())
+                    .limit(limit)
+                    .offset(offset)
+                    .load(&mut *conn)
+                    .map_err(|e: diesel::result::Error| e.to_string())?,
+            };
 
             Ok(rows.into_iter().map(Product::from).collect())
         })
