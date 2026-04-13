@@ -6,17 +6,24 @@ type TAURI_CHANNEL<T> = (response: T) => void
 
 export type DbConnectionArgs = { host: string; port: string; database: string; username: string; password: string }
 
+export type MonthlySales = { month: string; quantity: number }
+
 export type Product = { procod: string; prodes: string | null; proprccst: number; proprcvdavar: number }
 
-export type ProductsFilter = { search: string | null; limit: number | null; offset: number | null }
+export type ProductsFilter = { search: string | null; limit: number | null; offset: number | null; 
+/**
+ * Filtra por status fora de linha: "S" = apenas fora de linha, "N" = apenas ativos.
+ * None = sem filtro.
+ */
+proforlin: string | null }
 
-export type ResumoVendas = { produto_id: string; quantidade_vendida: number; total_venda: number; total_custo: number; venda_media_mensal: VendaMediaMensal[] }
+export type SalesSummary = { product_id: string; quantity_sold: number; total_sales: number; total_cost: number; monthly_sales: MonthlySales[] }
 
-export type SimilaresGroup = { id: string; descricao: string | null; similares: Product[] }
+export type SimilarGroup = { id: string; description: string | null; products: Product[] }
 
-export type VendaMediaMensal = { mes: string; quantidade: number }
+export type Stock = { product_code: string; quantity: number }
 
-const ARGS_MAP = { '':'{"connect_db":["args"],"disconnect_db":[],"hello_world":[],"is_connected":[],"load_connection_config":[],"save_connection_config":["args"]}', 'products':'{"get_all":["filter"],"get_by_code":["procod"]}', 'similares':'{"get_by_product":["procod"]}', 'vendas':'{"get_resumo_by_product":["procod"]}' }
+const ARGS_MAP = { '':'{"connect_db":["args"],"disconnect_db":[],"hello_world":[],"is_connected":[],"load_connection_config":[],"save_connection_config":["args"]}', 'products':'{"get_all":["filter"],"get_by_code":["procod"]}', 'sales':'{"get_summary_by_product":["procod"]}', 'similar':'{"get_by_product":["procod"]}', 'stock':'{"get_by_product":["procod"]}' }
 export type Router = { "": {connect_db: (args: DbConnectionArgs) => Promise<null>, 
 disconnect_db: () => Promise<void>, 
 hello_world: () => Promise<string>, 
@@ -25,8 +32,9 @@ load_connection_config: () => Promise<DbConnectionArgs | null>,
 save_connection_config: (args: DbConnectionArgs) => Promise<null>},
 "products": {get_all: (filter: ProductsFilter) => Promise<Product[]>, 
 get_by_code: (procod: string) => Promise<Product | null>},
-"similares": {get_by_product: (procod: string) => Promise<SimilaresGroup | null>},
-"vendas": {get_resumo_by_product: (procod: string) => Promise<ResumoVendas>} };
+"sales": {get_summary_by_product: (procod: string) => Promise<SalesSummary>},
+"similar": {get_by_product: (procod: string) => Promise<SimilarGroup | null>},
+"stock": {get_by_product: (procod: string) => Promise<Stock | null>} };
 
 
 export const createTauRPCProxy = () => createProxy<Router>(ARGS_MAP)

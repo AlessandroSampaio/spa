@@ -15,6 +15,9 @@ pub struct ProductsFilter {
     pub search: Option<String>,
     pub limit: Option<i32>,
     pub offset: Option<i32>,
+    /// Filtra por status fora de linha: "S" = apenas fora de linha, "N" = apenas ativos.
+    /// None = sem filtro.
+    pub proforlin: Option<String>,
 }
 
 // ── DB-only types ─────────────────────────────────────────────────────────────

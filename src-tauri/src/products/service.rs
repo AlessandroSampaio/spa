@@ -45,25 +45,23 @@ impl ProductsApi for ProductsImpl {
             let limit = filter.limit.unwrap_or(100).min(500) as i64;
             let offset = filter.offset.unwrap_or(0) as i64;
 
-            let rows: Vec<ProductRow> = if let Some(search) = filter.search {
+            let mut query = produto.select(ProductRow::as_select()).into_boxed();
+
+            if let Some(search) = filter.search {
                 let pattern = format!("%{}%", search.to_uppercase());
-                produto
-                    .select(ProductRow::as_select())
-                    .filter(prodes.like(pattern))
-                    .order(prodes.asc())
-                    .limit(limit)
-                    .offset(offset)
-                    .load(&mut *conn)
-                    .map_err(|e: diesel::result::Error| e.to_string())?
-            } else {
-                produto
-                    .select(ProductRow::as_select())
-                    .order(prodes.asc())
-                    .limit(limit)
-                    .offset(offset)
-                    .load(&mut *conn)
-                    .map_err(|e: diesel::result::Error| e.to_string())?
-            };
+                query = query.filter(prodes.like(pattern));
+            }
+
+            if let Some(fora_de_linha) = filter.proforlin {
+                query = query.filter(proforlin.eq(fora_de_linha));
+            }
+
+            let rows: Vec<ProductRow> = query
+                .order(prodes.asc())
+                .limit(limit)
+                .offset(offset)
+                .load(&mut *conn)
+                .map_err(|e: diesel::result::Error| e.to_string())?;
 
             Ok(rows.into_iter().map(Product::from).collect())
         })

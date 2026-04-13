@@ -23,19 +23,10 @@ pub struct SalesSummary {
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::itevda)]
 pub struct SaleItemRow {
-    pub id: i32,
     #[diesel(column_name = "trndat")]
     pub date: NaiveDateTime,
-    #[diesel(column_name = "procod")]
-    pub product_code: Option<String>,
     #[diesel(column_name = "itvqtdvda")]
     pub quantity_sold: Option<f64>,
-    #[diesel(column_name = "itvvlruni")]
-    pub unit_price: Option<f64>,
-    #[diesel(column_name = "itvvlrdcn")]
-    pub discount: Option<f64>,
-    #[diesel(column_name = "itvvlracr")]
-    pub surcharge: Option<f64>,
     #[diesel(column_name = "itvvlrtot")]
     pub total_value: Option<f64>,
     #[diesel(column_name = "itvprccst")]

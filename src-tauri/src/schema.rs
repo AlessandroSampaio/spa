@@ -3,11 +3,15 @@
 // são simplesmente ignoradas nas queries, sem afetar o banco de dados.
 
 diesel::table! {
+    use diesel::sql_types::*;
+
     produto (procod) {
         procod -> Text,
         prodes -> Nullable<Text>,
         proprccst -> Nullable<Double>,
         proprcvdavar -> Nullable<Double>,
+        proforlin -> Nullable<Text>,
+        prodatforlin -> Nullable<Timestamp>,
     }
 }
 
