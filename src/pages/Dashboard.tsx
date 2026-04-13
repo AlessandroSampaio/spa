@@ -88,7 +88,7 @@ export function Dashboard() {
 
   const [similar] = createResource(
     similarProcod,
-    (procod) => taurpc.similar.get_by_product(procod, false),
+    (procod) => taurpc.similar.get_by_product(procod, true),
   );
 
   // Só dispara novo fetch quando o produto selecionado NÃO pertence ao grupo atual.
@@ -141,13 +141,30 @@ export function Dashboard() {
                 {(similar) => (
                   <li
                     class="group flex cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-                    onClick={() => setSelectedProduct(similar)}
+                    onClick={() => setSelectedProduct({
+                      procod: similar.procod,
+                      prodes: similar.prodes,
+                      proprccst: similar.proprccst,
+                      proprcvdavar: similar.proprcvdavar,
+                    })}
                   >
                     <span class="text-xs font-bold tracking-wider text-primary-500 dark:text-primary-400">
                       {similar.procod.trim()}
                     </span>
                     <span class="text-xs text-gray-700 dark:text-gray-300">
                       {similar.prodes?.trim() ?? "—"}
+                    </span>
+                    <span
+                      class={`mt-1 text-xs font-medium ${
+                        (similar.stock?.quantity ?? 0) > 0
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-gray-400 dark:text-gray-500"
+                      }`}
+                    >
+                      Estoque:{" "}
+                      {similar.stock != null
+                        ? `${fmtNumber(similar.stock.quantity, 0)} un`
+                        : "—"}
                     </span>
                   </li>
                 )}
