@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js";
+import type { SimilarProduct } from "../bindings";
 import { Card } from "../components/ui/Card";
 import { StatCard } from "../components/ui/StatCard";
 import { CostHistoryChart } from "../components/ui/CostHistoryChart";
@@ -27,6 +28,16 @@ const IconCalendar = () => (
 const IconCart = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+  </svg>
+);
+const IconSortAsc = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 8l4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h10"/><path d="M11 16h7"/><path d="M11 20h4"/>
+  </svg>
+);
+const IconSortDesc = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 16l4 4 4-4"/><path d="M7 20V4"/><path d="M11 12h10"/><path d="M11 8h7"/><path d="M11 4h4"/>
   </svg>
 );
 
@@ -91,6 +102,29 @@ export function Dashboard() {
     (procod) => taurpc.similar.get_by_product(procod, true),
   );
 
+  // ── Similar sort ─────────────────────────────────────────────────────────
+  type SortField = "code" | "name" | "stock";
+  type SortDir   = "asc" | "desc";
+
+  const [sortField, setSortField] = createSignal<SortField>("code");
+  const [sortDir,   setSortDir]   = createSignal<SortDir>("asc");
+
+  const sortedProducts = createMemo<SimilarProduct[]>(() => {
+    const group = similar();
+    if (!group) return [];
+    return [...group.products].sort((a, b) => {
+      let cmp = 0;
+      if (sortField() === "code") {
+        cmp = a.procod.trim().localeCompare(b.procod.trim(), "pt-BR");
+      } else if (sortField() === "name") {
+        cmp = (a.prodes ?? "").trim().localeCompare((b.prodes ?? "").trim(), "pt-BR");
+      } else {
+        cmp = (a.stock?.quantity ?? 0) - (b.stock?.quantity ?? 0);
+      }
+      return sortDir() === "asc" ? cmp : -cmp;
+    });
+  });
+
   // Só dispara novo fetch quando o produto selecionado NÃO pertence ao grupo atual.
   // Clicar num similar não atualiza similarProcod pois ele já está na lista.
   createEffect(() => {
@@ -135,42 +169,68 @@ export function Dashboard() {
         </Show>
 
         <Show when={similar()}>
-          {(group) => (
-            <ul class="flex flex-col overflow-y-auto">
-              <For each={group().products}>
-                {(similar) => (
-                  <li
-                    class="group flex cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-                    onClick={() => setSelectedProduct({
-                      procod: similar.procod,
-                      prodes: similar.prodes,
-                      proprccst: similar.proprccst,
-                      proprcvdavar: similar.proprcvdavar,
-                    })}
+          {/* Sort toolbar */}
+          <div class="flex items-center gap-1 border-b border-gray-100 px-2 py-1.5 dark:border-white/10">
+            <div class="flex flex-1 gap-0.5 rounded-md bg-gray-100 p-0.5 dark:bg-white/5">
+              {(["code", "name", "stock"] as const).map((field) => (
+                <button
+                  class={`flex-1 rounded px-1 py-0.5 text-[10px] font-medium transition-colors ${
+                    sortField() === field
+                      ? "bg-white text-primary-600 shadow-sm dark:bg-surface-dark dark:text-primary-400"
+                      : "text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                  }`}
+                  onClick={() => setSortField(field)}
+                >
+                  {field === "code" ? "Cód" : field === "name" ? "Nome" : "Est"}
+                </button>
+              ))}
+            </div>
+            <button
+              class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+              title={sortDir() === "asc" ? "Crescente" : "Decrescente"}
+            >
+              <Show when={sortDir() === "asc"} fallback={<IconSortDesc />}>
+                <IconSortAsc />
+              </Show>
+            </button>
+          </div>
+
+          {/* Product list */}
+          <ul class="flex flex-col overflow-y-auto">
+            <For each={sortedProducts()}>
+              {(item) => (
+                <li
+                  class="group flex cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
+                  onClick={() => setSelectedProduct({
+                    procod: item.procod,
+                    prodes: item.prodes,
+                    proprccst: item.proprccst,
+                    proprcvdavar: item.proprcvdavar,
+                  })}
+                >
+                  <span class="text-xs font-bold tracking-wider text-primary-500 dark:text-primary-400">
+                    {item.procod.trim()}
+                  </span>
+                  <span class="text-xs text-gray-700 dark:text-gray-300">
+                    {item.prodes?.trim() ?? "—"}
+                  </span>
+                  <span
+                    class={`mt-1 text-xs font-medium ${
+                      (item.stock?.quantity ?? 0) > 0
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-gray-400 dark:text-gray-500"
+                    }`}
                   >
-                    <span class="text-xs font-bold tracking-wider text-primary-500 dark:text-primary-400">
-                      {similar.procod.trim()}
-                    </span>
-                    <span class="text-xs text-gray-700 dark:text-gray-300">
-                      {similar.prodes?.trim() ?? "—"}
-                    </span>
-                    <span
-                      class={`mt-1 text-xs font-medium ${
-                        (similar.stock?.quantity ?? 0) > 0
-                          ? "text-green-600 dark:text-green-400"
-                          : "text-gray-400 dark:text-gray-500"
-                      }`}
-                    >
-                      Estoque:{" "}
-                      {similar.stock != null
-                        ? `${fmtNumber(similar.stock.quantity, 0)} un`
-                        : "—"}
-                    </span>
-                  </li>
-                )}
-              </For>
-            </ul>
-          )}
+                    Estoque:{" "}
+                    {item.stock != null
+                      ? `${fmtNumber(item.stock.quantity, 0)} un`
+                      : "—"}
+                  </span>
+                </li>
+              )}
+            </For>
+          </ul>
         </Show>
       </Card>
 
