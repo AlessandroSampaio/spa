@@ -26,6 +26,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    estoque (procod) {
+        procod -> Text,
+        estatusdo -> Double,
+    }
+}
+
+diesel::table! {
     use diesel::sql_types::*;
 
     itevda (id) {
