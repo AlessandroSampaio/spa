@@ -19,11 +19,22 @@ proforlin: string | null }
 
 export type SalesSummary = { product_id: string; quantity_sold: number; total_sales: number; total_cost: number; monthly_sales: MonthlySales[] }
 
-export type SimilarGroup = { id: string; description: string | null; products: Product[] }
+export type SimilarGroup = { id: string; description: string | null; products: SimilarProduct[] }
+
+/**
+ * Produto dentro de um grupo de similares, com estoque opcional.
+ * Os campos de produto são expostos diretamente para manter compatibilidade
+ * com o frontend (ex.: `similar.procod` continua funcionando).
+ */
+export type SimilarProduct = { procod: string; prodes: string | null; proprccst: number; proprcvdavar: number; 
+/**
+ * Preenchido apenas quando `include_stock = true` em `get_by_product`.
+ */
+stock: Stock | null }
 
 export type Stock = { product_code: string; quantity: number }
 
-const ARGS_MAP = { '':'{"connect_db":["args"],"disconnect_db":[],"hello_world":[],"is_connected":[],"load_connection_config":[],"save_connection_config":["args"]}', 'products':'{"get_all":["filter"],"get_by_code":["procod"]}', 'sales':'{"get_summary_by_product":["procod"]}', 'similar':'{"get_by_product":["procod"]}', 'stock':'{"get_by_product":["procod"]}' }
+const ARGS_MAP = { '':'{"connect_db":["args"],"disconnect_db":[],"hello_world":[],"is_connected":[],"load_connection_config":[],"save_connection_config":["args"]}', 'products':'{"get_all":["filter"],"get_by_code":["procod"]}', 'sales':'{"get_summary_by_product":["procod"]}', 'similar':'{"get_by_product":["procod","include_stock"]}', 'stock':'{"get_by_product":["procod"]}' }
 export type Router = { "": {connect_db: (args: DbConnectionArgs) => Promise<null>, 
 disconnect_db: () => Promise<void>, 
 hello_world: () => Promise<string>, 
@@ -33,7 +44,7 @@ save_connection_config: (args: DbConnectionArgs) => Promise<null>},
 "products": {get_all: (filter: ProductsFilter) => Promise<Product[]>, 
 get_by_code: (procod: string) => Promise<Product | null>},
 "sales": {get_summary_by_product: (procod: string) => Promise<SalesSummary>},
-"similar": {get_by_product: (procod: string) => Promise<SimilarGroup | null>},
+"similar": {get_by_product: (procod: string, includeStock: boolean) => Promise<SimilarGroup | null>},
 "stock": {get_by_product: (procod: string) => Promise<Stock | null>} };
 
 

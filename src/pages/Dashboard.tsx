@@ -88,7 +88,7 @@ export function Dashboard() {
 
   const [similar] = createResource(
     similarProcod,
-    (procod) => taurpc.similar.get_by_product(procod),
+    (procod) => taurpc.similar.get_by_product(procod, false),
   );
 
   // Só dispara novo fetch quando o produto selecionado NÃO pertence ao grupo atual.

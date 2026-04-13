@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -5,7 +6,8 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, Select
 
 use crate::db::DbPool;
 use crate::products::models::{Product, ProductRow};
-use super::models::{SimilarGroup, SimilarRow};
+use crate::stock::models::StockRow;
+use super::models::{SimilarGroup, SimilarProduct, SimilarRow};
 
 type DbState = Arc<Mutex<Option<DbPool>>>;
 
@@ -13,7 +15,7 @@ type DbState = Arc<Mutex<Option<DbPool>>>;
 
 #[taurpc::procedures(path = "similar")]
 pub trait SimilarApi {
-    async fn get_by_product(procod: String) -> Result<Option<SimilarGroup>, String>;
+    async fn get_by_product(procod: String, include_stock: bool) -> Result<Option<SimilarGroup>, String>;
 }
 
 // ── Impl ──────────────────────────────────────────────────────────────────────
@@ -25,7 +27,7 @@ pub struct SimilarImpl {
 
 #[taurpc::resolvers]
 impl SimilarApi for SimilarImpl {
-    async fn get_by_product(self, procod: String) -> Result<Option<SimilarGroup>, String> {
+    async fn get_by_product(self, procod: String, include_stock: bool) -> Result<Option<SimilarGroup>, String> {
         let pool = self
             .db
             .lock()
@@ -75,7 +77,33 @@ impl SimilarApi for SimilarImpl {
                 .load::<ProductRow>(&mut *conn)
                 .map_err(|e| e.to_string())?;
 
-            let products: Vec<Product> = rows.into_iter().map(Product::from).collect();
+            // 5. Optionally load stock for all products in a single query.
+            let mut stock_map: HashMap<String, StockRow> = HashMap::new();
+            if include_stock {
+                use crate::schema::estoque::dsl as est_dsl;
+
+                let stock_rows: Vec<StockRow> = est_dsl::estoque
+                    .filter(est_dsl::procod.eq_any(&product_codes))
+                    .select(StockRow::as_select())
+                    .load::<StockRow>(&mut *conn)
+                    .map_err(|e| e.to_string())?;
+
+                for row in stock_rows {
+                    stock_map.insert(row.product_code.clone(), row);
+                }
+            }
+
+            // 6. Build SimilarProduct list, attaching stock when available.
+            let products: Vec<SimilarProduct> = rows
+                .into_iter()
+                .map(|row| {
+                    let mut sp = SimilarProduct::from(Product::from(row));
+                    if include_stock {
+                        sp.stock = stock_map.remove(&sp.procod).map(crate::stock::models::Stock::from);
+                    }
+                    sp
+                })
+                .collect();
 
             Ok(Some(SimilarGroup {
                 id: header.group_code,
