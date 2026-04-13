@@ -5,14 +5,14 @@ use tokio::sync::Mutex;
 use chrono::{Datelike, NaiveDate, NaiveDateTime};
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 
-use super::models::{ItemVendaRow, ResumoVendas, VendaMediaMensal};
+use super::models::{MonthlySales, SaleItemRow, SalesSummary};
 use crate::db::DbPool;
 
 type DbState = Arc<Mutex<Option<DbPool>>>;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-fn month_name_pt(month: u32) -> &'static str {
+fn month_name(month: u32) -> &'static str {
     match month {
         1 => "Janeiro",
         2 => "Fevereiro",
@@ -26,7 +26,7 @@ fn month_name_pt(month: u32) -> &'static str {
         10 => "Outubro",
         11 => "Novembro",
         12 => "Dezembro",
-        _ => "Desconhecido",
+        _ => "Unknown",
     }
 }
 
@@ -64,21 +64,21 @@ fn six_months_ago() -> NaiveDateTime {
 
 // ── Procedures ────────────────────────────────────────────────────────────────
 
-#[taurpc::procedures(path = "vendas")]
-pub trait VendasApi {
-    async fn get_resumo_by_product(procod: String) -> Result<ResumoVendas, String>;
+#[taurpc::procedures(path = "sales")]
+pub trait SalesApi {
+    async fn get_summary_by_product(procod: String) -> Result<SalesSummary, String>;
 }
 
 // ── Impl ──────────────────────────────────────────────────────────────────────
 
 #[derive(Clone)]
-pub struct VendasImpl {
+pub struct SalesImpl {
     pub db: DbState,
 }
 
 #[taurpc::resolvers]
-impl VendasApi for VendasImpl {
-    async fn get_resumo_by_product(self, procod_arg: String) -> Result<ResumoVendas, String> {
+impl SalesApi for SalesImpl {
+    async fn get_summary_by_product(self, procod_arg: String) -> Result<SalesSummary, String> {
         let pool = self
             .db
             .lock()
@@ -87,37 +87,37 @@ impl VendasApi for VendasImpl {
             .ok_or("Sem conexão com o banco de dados")?
             .clone();
 
-        tokio::task::spawn_blocking(move || -> Result<ResumoVendas, String> {
+        tokio::task::spawn_blocking(move || -> Result<SalesSummary, String> {
             use crate::schema::itevda::dsl::*;
 
             let mut conn = pool.get().map_err(|e| e.to_string())?;
 
             let cutoff = six_months_ago();
 
-            let rows: Vec<ItemVendaRow> = itevda
-                .select(ItemVendaRow::as_select())
+            let rows: Vec<SaleItemRow> = itevda
+                .select(SaleItemRow::as_select())
                 .filter(procod.eq(&procod_arg))
                 .filter(trndat.ge(cutoff))
                 .load(&mut *conn)
                 .map_err(|e| e.to_string())?;
 
             let mut total_qty = 0.0_f64;
-            let mut total_venda = 0.0_f64;
-            let mut total_custo = 0.0_f64;
+            let mut total_sales = 0.0_f64;
+            let mut total_cost = 0.0_f64;
             // key: (year, month) → accumulated quantity
             let mut monthly: HashMap<(i32, u32), f64> = HashMap::new();
 
             for row in &rows {
-                let qty = row.itvqtdvda.unwrap_or(0.0);
-                let vlrtot = row.itvvlrtot.unwrap_or(0.0);
-                let prccst = row.itvprccst.unwrap_or(0.0);
+                let qty = row.quantity_sold.unwrap_or(0.0);
+                let total_value = row.total_value.unwrap_or(0.0);
+                let cost_price = row.cost_price.unwrap_or(0.0);
 
                 total_qty += qty;
-                total_venda += vlrtot;
-                total_custo += qty * prccst;
+                total_sales += total_value;
+                total_cost += qty * cost_price;
 
                 *monthly
-                    .entry((row.trndat.year(), row.trndat.month()))
+                    .entry((row.date.year(), row.date.month()))
                     .or_insert(0.0) += qty;
             }
 
@@ -128,20 +128,20 @@ impl VendasApi for VendasImpl {
                 .collect();
             monthly_sorted.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 
-            let venda_media_mensal: Vec<VendaMediaMensal> = monthly_sorted
+            let monthly_sales: Vec<MonthlySales> = monthly_sorted
                 .into_iter()
-                .map(|(_, m, qty)| VendaMediaMensal {
-                    mes: month_name_pt(m).to_string(),
-                    quantidade: qty,
+                .map(|(_, m, qty)| MonthlySales {
+                    month: month_name(m).to_string(),
+                    quantity: qty,
                 })
                 .collect();
 
-            Ok(ResumoVendas {
-                produto_id: procod_arg,
-                quantidade_vendida: total_qty,
-                total_venda,
-                total_custo,
-                venda_media_mensal,
+            Ok(SalesSummary {
+                product_id: procod_arg,
+                quantity_sold: total_qty,
+                total_sales,
+                total_cost,
+                monthly_sales,
             })
         })
         .await

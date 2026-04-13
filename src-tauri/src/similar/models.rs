@@ -5,18 +5,19 @@ use crate::products::models::Product;
 // ── IPC types ─────────────────────────────────────────────────────────────────
 
 #[taurpc::ipc_type]
-pub struct SimilaresGroup {
+pub struct SimilarGroup {
     pub id: String,
-    pub descricao: Option<String>,
-    pub similares: Vec<Product>,
+    pub description: Option<String>,
+    pub products: Vec<Product>,
 }
 
 // ── DB-only types ─────────────────────────────────────────────────────────────
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::similares)]
-pub struct SimilaresRow {
-    pub procodsim: String,
-    pub similaresdes: Option<String>,
+pub struct SimilarRow {
+    #[diesel(column_name = "procodsim")]
+    pub group_code: String,
+    #[diesel(column_name = "similaresdes")]
+    pub description: Option<String>,
 }
-

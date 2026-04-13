@@ -5,27 +5,27 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, Select
 
 use crate::db::DbPool;
 use crate::products::models::{Product, ProductRow};
-use super::models::{SimilaresGroup, SimilaresRow};
+use super::models::{SimilarGroup, SimilarRow};
 
 type DbState = Arc<Mutex<Option<DbPool>>>;
 
 // ── Procedures ────────────────────────────────────────────────────────────────
 
-#[taurpc::procedures(path = "similares")]
-pub trait SimilaresApi {
-    async fn get_by_product(procod: String) -> Result<Option<SimilaresGroup>, String>;
+#[taurpc::procedures(path = "similar")]
+pub trait SimilarApi {
+    async fn get_by_product(procod: String) -> Result<Option<SimilarGroup>, String>;
 }
 
 // ── Impl ──────────────────────────────────────────────────────────────────────
 
 #[derive(Clone)]
-pub struct SimilaresImpl {
+pub struct SimilarImpl {
     pub db: DbState,
 }
 
 #[taurpc::resolvers]
-impl SimilaresApi for SimilaresImpl {
-    async fn get_by_product(self, procod: String) -> Result<Option<SimilaresGroup>, String> {
+impl SimilarApi for SimilarImpl {
+    async fn get_by_product(self, procod: String) -> Result<Option<SimilarGroup>, String> {
         let pool = self
             .db
             .lock()
@@ -34,7 +34,7 @@ impl SimilaresApi for SimilaresImpl {
             .ok_or("Sem conexão com o banco de dados")?
             .clone();
 
-        tokio::task::spawn_blocking(move || -> Result<Option<SimilaresGroup>, String> {
+        tokio::task::spawn_blocking(move || -> Result<Option<SimilarGroup>, String> {
             use crate::schema::item_similares::dsl as is_dsl;
             use crate::schema::similares::dsl as sim_dsl;
             use crate::schema::produto::dsl as prod_dsl;
@@ -54,11 +54,11 @@ impl SimilaresApi for SimilaresImpl {
                 None => return Ok(None),
             };
 
-            // 2. Load the similares header (description).
-            let header: SimilaresRow = sim_dsl::similares
+            // 2. Load the similar group header (description).
+            let header: SimilarRow = sim_dsl::similares
                 .filter(sim_dsl::procodsim.eq(&group_id))
-                .select(SimilaresRow::as_select())
-                .first::<SimilaresRow>(&mut *conn)
+                .select(SimilarRow::as_select())
+                .first::<SimilarRow>(&mut *conn)
                 .map_err(|e| e.to_string())?;
 
             // 3. Collect all product codes in this group.
@@ -75,12 +75,12 @@ impl SimilaresApi for SimilaresImpl {
                 .load::<ProductRow>(&mut *conn)
                 .map_err(|e| e.to_string())?;
 
-            let similares: Vec<Product> = rows.into_iter().map(Product::from).collect();
+            let products: Vec<Product> = rows.into_iter().map(Product::from).collect();
 
-            Ok(Some(SimilaresGroup {
-                id: header.procodsim,
-                descricao: header.similaresdes,
-                similares,
+            Ok(Some(SimilarGroup {
+                id: header.group_code,
+                description: header.description,
+                products,
             }))
         })
         .await

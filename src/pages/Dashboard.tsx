@@ -58,7 +58,7 @@ const mockProduct: ProductDashboard = {
   purchaseSuggestion: 250,
   lastPurchase: { date: "15/03/2026", price: 21.0, quantity: 300 },
   lastSale: { date: "11/04/2026", price: 28.9, quantity: 2 },
-  similares: [
+  similar: [
     { code: "001235", name: "Arroz Branco 2kg" },
     { code: "001236", name: "Arroz Integral 5kg" },
     { code: "001237", name: "Arroz Parboilizado 5kg" },
@@ -88,54 +88,54 @@ const PERIOD_DAYS = (() => {
 export function Dashboard() {
   const p = mockProduct;
 
-  // ── Vendas resource ───────────────────────────────────────────────────────
-  const [vendas] = createResource(
+  // ── Sales resource ────────────────────────────────────────────────────────
+  const [sales] = createResource(
     () => selectedProduct()?.procod ?? null,
-    (procod) => taurpc.vendas.get_resumo_by_product(procod),
+    (procod) => taurpc.sales.get_summary_by_product(procod),
   );
 
   // Receita média mensal dos últimos 6 meses
   const avgMonthlyRevenue = createMemo(() =>
-    vendas()?.total_venda != null
-      ? vendas()!.total_venda / 6
+    sales()?.total_sales != null
+      ? sales()!.total_sales / 6
       : p.avgSalesLast6Months,
   );
 
   // Média diária de unidades vendidas = quantidade total ÷ dias decorridos
   const avgDailySalesQty = createMemo(() =>
-    vendas()?.quantidade_vendida != null
-      ? vendas()!.quantidade_vendida / PERIOD_DAYS
+    sales()?.quantity_sold != null
+      ? sales()!.quantity_sold / PERIOD_DAYS
       : p.avgDailySales,
   );
 
   // Histórico mensal para o gráfico de barras
   const salesChartData = createMemo(() => {
-    const data = vendas();
+    const data = sales();
     if (!data) return p.salesHistory;
-    return data.venda_media_mensal.map((d) => ({ month: d.mes, value: d.quantidade }));
+    return data.monthly_sales.map((d) => ({ month: d.month, value: d.quantity }));
   });
 
-  const [similaresProcod, setSimilaresProcod] = createSignal<string | null>(null);
+  const [similarProcod, setSimilarProcod] = createSignal<string | null>(null);
 
-  const [similares] = createResource(
-    similaresProcod,
-    (procod) => taurpc.similares.get_by_product(procod),
+  const [similar] = createResource(
+    similarProcod,
+    (procod) => taurpc.similar.get_by_product(procod),
   );
 
   // Só dispara novo fetch quando o produto selecionado NÃO pertence ao grupo atual.
-  // Clicar num similar não atualiza similaresProcod pois ele já está na lista.
+  // Clicar num similar não atualiza similarProcod pois ele já está na lista.
   createEffect(() => {
     const product = selectedProduct();
     if (!product) {
-      setSimilaresProcod(null);
+      setSimilarProcod(null);
       return;
     }
-    const currentGroup = similares();
-    const isInCurrentGroup = currentGroup?.similares.some(
+    const currentGroup = similar();
+    const isInCurrentGroup = currentGroup?.products.some(
       (s) => s.procod === product.procod,
     );
     if (!isInCurrentGroup) {
-      setSimilaresProcod(product.procod);
+      setSimilarProcod(product.procod);
     }
   });
 
@@ -153,22 +153,22 @@ export function Dashboard() {
           </p>
         </Show>
 
-        <Show when={selectedProduct() && similares.loading}>
+        <Show when={selectedProduct() && similar.loading}>
           <p class="px-4 py-3 text-xs text-gray-400 dark:text-gray-500">
             Carregando…
           </p>
         </Show>
 
-        <Show when={selectedProduct() && !similares.loading && similares() === null}>
+        <Show when={selectedProduct() && !similar.loading && similar() === null}>
           <p class="px-4 py-3 text-xs text-gray-400 dark:text-gray-500">
             Produto não possui similares associados.
           </p>
         </Show>
 
-        <Show when={similares()}>
+        <Show when={similar()}>
           {(group) => (
             <ul class="flex flex-col overflow-y-auto">
-              <For each={group().similares}>
+              <For each={group().products}>
                 {(similar) => (
                   <li
                     class="group flex cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
