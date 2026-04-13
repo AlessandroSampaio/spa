@@ -39,6 +39,34 @@ diesel::table! {
 diesel::table! {
     use diesel::sql_types::*;
 
+    entrada (forcod, entser, entdoc, enttnf) {
+        forcod -> Text,
+        entser -> Text,
+        entdoc -> Text,
+        enttnf -> Text,
+        entdat -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+
+    item_entrada (forcod, entser, entdoc, enttnf, iteseq) {
+        forcod    -> Text,
+        entser    -> Text,
+        entdoc    -> Text,
+        enttnf    -> Text,
+        iteseq    -> Integer,
+        procod    -> Text,
+        iteuniemb -> Nullable<Double>,
+        iteqtdemb -> Nullable<Double>,
+        itevlrtot -> Nullable<Double>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+
     itevda (id) {
         id -> Integer,
         trndat -> Timestamp,

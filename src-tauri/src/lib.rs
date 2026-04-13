@@ -1,9 +1,11 @@
 mod db;
+mod entries;
 mod products;
 mod sales;
 mod schema;
 mod similar;
 mod stock;
+mod utils;
 
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
@@ -11,6 +13,7 @@ use tokio::sync::Mutex;
 use tauri::Manager;
 
 use db::{build_pool, ConnectionConfig, DbPool};
+use entries::{EntriesApi, EntriesImpl};
 use products::{ProductsApi, ProductsImpl};
 use sales::{SalesApi, SalesImpl};
 use similar::{SimilarApi, SimilarImpl};
@@ -180,6 +183,12 @@ pub fn run() {
             )
             .merge(
                 StockImpl {
+                    db: db_state.clone(),
+                }
+                .into_handler(),
+            )
+            .merge(
+                EntriesImpl {
                     db: db_state.clone(),
                 }
                 .into_handler(),
