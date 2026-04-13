@@ -115,6 +115,12 @@ export function Dashboard() {
     return data.monthly_sales.map((d) => ({ month: d.month, value: d.quantity }));
   });
 
+  // ── Stock resource ────────────────────────────────────────────────────────
+  const [stock] = createResource(
+    () => selectedProduct()?.procod ?? null,
+    (procod) => taurpc.stock.get_by_product(procod),
+  );
+
   const [similarProcod, setSimilarProcod] = createSignal<string | null>(null);
 
   const [similar] = createResource(
@@ -241,7 +247,7 @@ export function Dashboard() {
         />
         <StatCard
           label="Saldo de Estoque"
-          value={`${fmtNumber(p.currentStock, 0)} un`}
+          value={`${fmtNumber(stock()?.quantity ?? p.currentStock, 0)} un`}
           sublabel="unidades disponíveis"
           icon={<IconBox />}
           accent="green"
