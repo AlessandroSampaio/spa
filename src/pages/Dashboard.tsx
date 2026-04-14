@@ -10,12 +10,11 @@ import {
 } from "solid-js";
 import type { SimilarProduct } from "../bindings";
 import { Card } from "../components/ui/Card";
-import { StatCard } from "../components/ui/StatCard";
 import { EntriesHistoryChart } from "../components/ui/EntriesHistoryChart";
 import { SalesHistoryChart } from "../components/ui/SalesHistoryChart";
-import { TransactionCard } from "../components/ui/TransactionCard";
-import { selectedProduct, setSelectedProduct } from "../stores/selectedProduct";
+import { StatCard } from "../components/ui/StatCard";
 import { proforlinFilter } from "../stores/proforlinFilter";
+import { selectedProduct, setSelectedProduct } from "../stores/selectedProduct";
 import { taurpc } from "../stores/taurpc";
 
 // ── Icons ────────────────────────────────────────────────────────────────────
@@ -535,24 +534,13 @@ export function Dashboard() {
           />
         </div>
 
-        {/* Charts + transactions */}
-        <div class="grid grid-cols-4 gap-4">
-          <div class="col-span-2">
-            <Show
-              when={entriesChartData().length > 0}
-              fallback={
-                <NoData
-                  label="Compras por Mês — últimos 6 meses"
-                  class="h-full"
-                />
-              }
-            >
-              <EntriesHistoryChart data={entriesChartData()} />
-            </Show>
-          </div>
-          <NoData label="Última Compra" />
-          <NoData label="Última Venda" />
-        </div>
+        {/* Entries history — full width */}
+        <Show
+          when={entriesChartData().length > 0}
+          fallback={<NoData label="Compras por Mês — últimos 6 meses" />}
+        >
+          <EntriesHistoryChart data={entriesChartData()} />
+        </Show>
 
         {/* Sales history — full width */}
         <Show

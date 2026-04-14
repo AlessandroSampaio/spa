@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use chrono::Datelike;
-use diesel::sql_types::{Text, Timestamp};
+use diesel::sql_types::Text;
 use diesel::{sql_query, RunQueryDsl};
 
 use super::models::{EntriesSummary, EntryItemRow, MonthlyEntries};
@@ -42,8 +42,10 @@ impl EntriesApi for EntriesImpl {
 
             let cutoff = six_months_ago();
 
-            let rows: Vec<EntryItemRow> = sql_query(
-                "SELECT e.ENTDAT AS date, \
+            let cutoff_str = cutoff.format("%Y-%m-%d %H:%M:%S").to_string();
+
+            let rows: Vec<EntryItemRow> = sql_query(format!(
+                "SELECT e.ENTDAT AS entry_date, \
                         ie.ITEQTDEMB AS quantity_emb, \
                         ie.ITEUNIEMB AS units_emb, \
                         ie.ITEVLRTOT AS total_value \
@@ -54,10 +56,10 @@ impl EntriesApi for EntriesImpl {
                         AND ie.ENTDOC = e.ENTDOC \
                         AND ie.ENTTNF = e.ENTTNF \
                  WHERE ie.PROCOD = ? \
-                   AND e.ENTDAT >= ?",
-            )
+                   AND e.ENTDAT >= CAST('{}' AS TIMESTAMP)",
+                cutoff_str
+            ))
             .bind::<Text, _>(&procod_arg)
-            .bind::<Timestamp, _>(cutoff)
             .load(&mut *conn)
             .map_err(|e| e.to_string())?;
 
@@ -74,7 +76,7 @@ impl EntriesApi for EntriesImpl {
                 total_qty += qty;
                 total_value += row.total_value.unwrap_or(0.0);
 
-                if let Some(date) = row.date {
+                if let Some(date) = row.entry_date {
                     *monthly.entry((date.year(), date.month())).or_insert(0.0) += qty;
                 }
             }

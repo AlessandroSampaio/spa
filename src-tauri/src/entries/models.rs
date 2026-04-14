@@ -23,7 +23,7 @@ pub struct EntriesSummary {
 #[derive(QueryableByName)]
 pub struct EntryItemRow {
     #[diesel(sql_type = Nullable<Timestamp>)]
-    pub date: Option<NaiveDateTime>,
+    pub entry_date: Option<NaiveDateTime>,
     #[diesel(sql_type = Nullable<Double>)]
     pub quantity_emb: Option<f64>,
     #[diesel(sql_type = Nullable<Double>)]
