@@ -53,11 +53,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "SPA - Analise de Produtos v__VERSION__"
           releaseBody: ${{ steps.changelog.outputs.body }}
           releaseDraft: false
           prerelease: false
+          updaterJsonKeepUniversal: true
           args: ${{ matrix.args }}

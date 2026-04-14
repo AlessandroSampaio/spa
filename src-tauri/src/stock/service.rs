@@ -3,8 +3,8 @@ use tokio::sync::Mutex;
 
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
 
-use crate::db::DbPool;
 use super::models::{Stock, StockRow};
+use crate::db::DbPool;
 
 type DbState = Arc<Mutex<Option<DbPool>>>;
 

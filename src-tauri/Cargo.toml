@@ -30,3 +30,6 @@ chrono = "0.4"
 rsfbclient-diesel = { version = "0.26.0", default-features = false, features = ["linking"] }
 r2d2_firebird = { version = "0.26.0", features = ["diesel_pool"] }
 
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
+

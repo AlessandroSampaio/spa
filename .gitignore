@@ -5,3 +5,6 @@ dist
 
 # TauRPC bindings, generated on runtime
 src/bindings.ts
+
+# Tauri Secrets
+.tauri/
