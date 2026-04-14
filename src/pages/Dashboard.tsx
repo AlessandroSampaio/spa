@@ -326,7 +326,7 @@ export function Dashboard() {
           </Show>
         </Card>
 
-        {/* Stat cards — vendas */}
+        {/* Stat cards — vendas + estoque */}
         <div class="grid grid-cols-4 gap-4">
           <StatCard
             label="Venda Média (6 meses)"
@@ -336,13 +336,6 @@ export function Dashboard() {
             accent="blue"
           />
           <StatCard
-            label="Saldo de Estoque"
-            value={stock()?.quantity != null ? `${fmtNumber(stock()!.quantity, 0)} un` : "—"}
-            sublabel="unidades disponíveis"
-            icon={<IconBox />}
-            accent="green"
-          />
-          <StatCard
             label="Venda Média Diária"
             value={avgDailySalesQty() != null ? `${fmtNumber(avgDailySalesQty()!)} un/dia` : "—"}
             sublabel="últimos 6 meses"
@@ -350,15 +343,22 @@ export function Dashboard() {
             accent="purple"
           />
           <StatCard
-            label="Sugestão de Compra"
-            value={purchaseSuggestion() != null ? `${fmtNumber(purchaseSuggestion()!, 0)} un` : "—"}
-            sublabel="cobertura de 30 dias"
-            icon={<IconCart />}
-            accent="amber"
+            label="Saldo de Estoque"
+            value={stock()?.quantity != null ? `${fmtNumber(stock()!.quantity, 0)} un` : "—"}
+            sublabel="unidades disponíveis"
+            icon={<IconBox />}
+            accent="green"
+          />
+          <StatCard
+            label="Dias de Estoque"
+            value={daysOfStock() != null ? `${daysOfStock()} dias` : "—"}
+            sublabel="cobertura com giro atual"
+            icon={<IconCalendar />}
+            accent="green"
           />
         </div>
 
-        {/* Stat cards — compras */}
+        {/* Stat cards — compras + sugestão */}
         <div class="grid grid-cols-4 gap-4">
           <StatCard
             label="Total Comprado (6 meses)"
@@ -382,11 +382,11 @@ export function Dashboard() {
             accent="blue"
           />
           <StatCard
-            label="Dias de Estoque"
-            value={daysOfStock() != null ? `${daysOfStock()} dias` : "—"}
-            sublabel="cobertura com giro atual"
-            icon={<IconCalendar />}
-            accent="green"
+            label="Sugestão de Compra"
+            value={purchaseSuggestion() != null ? `${fmtNumber(purchaseSuggestion()!, 0)} un` : "—"}
+            sublabel="cobertura de 30 dias"
+            icon={<IconCart />}
+            accent="amber"
           />
         </div>
 
