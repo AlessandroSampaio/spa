@@ -6,6 +6,7 @@ import { EntriesHistoryChart } from "../components/ui/EntriesHistoryChart";
 import { SalesHistoryChart } from "../components/ui/SalesHistoryChart";
 import { TransactionCard } from "../components/ui/TransactionCard";
 import { selectedProduct, setSelectedProduct } from "../stores/selectedProduct";
+import { proforlinFilter } from "../stores/proforlinFilter";
 import { taurpc } from "../stores/taurpc";
 
 // ── Icons ────────────────────────────────────────────────────────────────────
@@ -128,8 +129,12 @@ export function Dashboard() {
   const [similarProcod, setSimilarProcod] = createSignal<string | null>(null);
 
   const [similar] = createResource(
-    similarProcod,
-    (procod) => taurpc.similar.get_by_product(procod, true),
+    () => {
+      const procod = similarProcod();
+      if (!procod) return null;
+      return { procod, outOfLine: proforlinFilter() === "S" };
+    },
+    ({ procod, outOfLine }) => taurpc.similar.get_by_product(procod, true, outOfLine),
   );
 
   // ── Similar sort ─────────────────────────────────────────────────────────

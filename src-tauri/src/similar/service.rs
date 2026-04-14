@@ -2,12 +2,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{
+    BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl,
+    SelectableHelper,
+};
 
+use super::models::{SimilarGroup, SimilarProduct, SimilarRow};
 use crate::db::DbPool;
 use crate::products::models::{Product, ProductRow};
 use crate::stock::models::StockRow;
-use super::models::{SimilarGroup, SimilarProduct, SimilarRow};
 
 type DbState = Arc<Mutex<Option<DbPool>>>;
 
@@ -15,7 +18,11 @@ type DbState = Arc<Mutex<Option<DbPool>>>;
 
 #[taurpc::procedures(path = "similar")]
 pub trait SimilarApi {
-    async fn get_by_product(procod: String, include_stock: bool) -> Result<Option<SimilarGroup>, String>;
+    async fn get_by_product(
+        procod: String,
+        include_stock: bool,
+        out_of_line: bool,
+    ) -> Result<Option<SimilarGroup>, String>;
 }
 
 // ── Impl ──────────────────────────────────────────────────────────────────────
@@ -27,7 +34,12 @@ pub struct SimilarImpl {
 
 #[taurpc::resolvers]
 impl SimilarApi for SimilarImpl {
-    async fn get_by_product(self, procod: String, include_stock: bool) -> Result<Option<SimilarGroup>, String> {
+    async fn get_by_product(
+        self,
+        procod: String,
+        include_stock: bool,
+        out_of_line: bool,
+    ) -> Result<Option<SimilarGroup>, String> {
         let pool = self
             .db
             .lock()
@@ -38,8 +50,8 @@ impl SimilarApi for SimilarImpl {
 
         tokio::task::spawn_blocking(move || -> Result<Option<SimilarGroup>, String> {
             use crate::schema::item_similares::dsl as is_dsl;
-            use crate::schema::similares::dsl as sim_dsl;
             use crate::schema::produto::dsl as prod_dsl;
+            use crate::schema::similares::dsl as sim_dsl;
 
             let mut conn = pool.get().map_err(|e| e.to_string())?;
 
@@ -70,12 +82,26 @@ impl SimilarApi for SimilarImpl {
                 .load::<String>(&mut *conn)
                 .map_err(|e| e.to_string())?;
 
-            // 4. Load the matching PRODUTO rows.
-            let rows: Vec<ProductRow> = prod_dsl::produto
-                .filter(prod_dsl::procod.eq_any(&product_codes))
-                .select(ProductRow::as_select())
-                .load::<ProductRow>(&mut *conn)
-                .map_err(|e| e.to_string())?;
+            // 4. Load the matching PRODUTO rows, filtered by out-of-line status.
+            let rows: Vec<ProductRow> = if out_of_line {
+                prod_dsl::produto
+                    .filter(prod_dsl::procod.eq_any(&product_codes))
+                    .filter(prod_dsl::proforlin.eq("S"))
+                    .select(ProductRow::as_select())
+                    .load::<ProductRow>(&mut *conn)
+                    .map_err(|e| e.to_string())?
+            } else {
+                prod_dsl::produto
+                    .filter(prod_dsl::procod.eq_any(&product_codes))
+                    .filter(
+                        prod_dsl::proforlin
+                            .ne("S")
+                            .or(prod_dsl::proforlin.is_null()),
+                    )
+                    .select(ProductRow::as_select())
+                    .load::<ProductRow>(&mut *conn)
+                    .map_err(|e| e.to_string())?
+            };
 
             // 5. Optionally load stock for all products in a single query.
             let mut stock_map: HashMap<String, StockRow> = HashMap::new();
@@ -99,7 +125,9 @@ impl SimilarApi for SimilarImpl {
                 .map(|row| {
                     let mut sp = SimilarProduct::from(Product::from(row));
                     if include_stock {
-                        sp.stock = stock_map.remove(&sp.procod).map(crate::stock::models::Stock::from);
+                        sp.stock = stock_map
+                            .remove(&sp.procod)
+                            .map(crate::stock::models::Stock::from);
                     }
                     sp
                 })
