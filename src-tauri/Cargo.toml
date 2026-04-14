@@ -27,8 +27,8 @@ specta = { version = "=2.0.0-rc.22", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 diesel = { version = "=2.0.0", features = ["r2d2", "chrono"] }
 chrono = "0.4"
-rsfbclient-diesel = { version = "0.26.0", default-features = false, features = ["linking"] }
-r2d2_firebird = { version = "0.26.0", features = ["diesel_pool"] }
+rsfbclient-diesel = { version = "0.26.0", default-features = false, features = ["pure_rust"] }
+r2d2 = "0.8.9"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
