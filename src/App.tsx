@@ -1,5 +1,7 @@
 import "./stores/theme";
 import { onMount } from "solid-js";
+import { getVersion } from "@tauri-apps/api/app";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ProductSearch } from "./components/ui/ProductSearch";
 import { LineFilterSelect } from "./components/ui/LineFilterSelect";
 import { SettingsDialog } from "./components/forms/SettingsDialog";
@@ -7,9 +9,13 @@ import { Dashboard } from "./pages/Dashboard";
 import { taurpc } from "./stores/taurpc";
 
 function App() {
-  // Auto-connect on startup using the last persisted configuration.
-  // Failures are silently ignored — the user can manually connect via Settings.
   onMount(async () => {
+    // Update window title with app version.
+    const version = await getVersion();
+    await getCurrentWindow().setTitle(`SPA - Analise de Produtos v${version}`);
+
+    // Auto-connect on startup using the last persisted configuration.
+    // Failures are silently ignored — the user can manually connect via Settings.
     try {
       const saved = await (taurpc as any).load_connection_config();
       if (saved) {
