@@ -2,8 +2,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use diesel::{
-    ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
-    TextExpressionMethods,
+    BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl,
+    SelectableHelper, TextExpressionMethods,
 };
 
 use super::models::{Product, ProductRow, ProductsFilter};
@@ -48,10 +48,21 @@ impl ProductsApi for ProductsImpl {
             // Diesel 2.0 + SelectBy doesn't support into_boxed(); enumerate combos.
             let rows: Vec<ProductRow> = match (filter.search, filter.proforlin) {
                 (Some(search), Some(fora)) => {
+                    use crate::schema::produtoaux;
                     let pattern = format!("%{}%", search.to_uppercase());
                     produto
                         .select(ProductRow::as_select())
-                        .filter(prodes.like(pattern))
+                        .filter(
+                            prodes
+                                .like(pattern.clone())
+                                .or(procod.like(pattern.clone()))
+                                .or(diesel::dsl::exists(
+                                    produtoaux::table
+                                        .filter(produtoaux::procod.eq(procod))
+                                        .filter(produtoaux::procodaux.like(pattern))
+                                        .select(produtoaux::procodaux),
+                                )),
+                        )
                         .filter(proforlin.eq(fora))
                         .order(prodes.asc())
                         .limit(limit)
@@ -60,10 +71,21 @@ impl ProductsApi for ProductsImpl {
                         .map_err(|e: diesel::result::Error| e.to_string())?
                 }
                 (Some(search), None) => {
+                    use crate::schema::produtoaux;
                     let pattern = format!("%{}%", search.to_uppercase());
                     produto
                         .select(ProductRow::as_select())
-                        .filter(prodes.like(pattern))
+                        .filter(
+                            prodes
+                                .like(pattern.clone())
+                                .or(procod.like(pattern.clone()))
+                                .or(diesel::dsl::exists(
+                                    produtoaux::table
+                                        .filter(produtoaux::procod.eq(procod))
+                                        .filter(produtoaux::procodaux.like(pattern))
+                                        .select(produtoaux::procodaux),
+                                )),
+                        )
                         .order(prodes.asc())
                         .limit(limit)
                         .offset(offset)

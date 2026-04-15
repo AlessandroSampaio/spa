@@ -65,6 +65,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    produtoaux (procodaux) {
+        procodaux -> Text,
+        procod -> Text,
+    }
+}
+
+diesel::joinable!(produtoaux -> produto (procod));
+diesel::allow_tables_to_appear_in_same_query!(produto, produtoaux);
+
+diesel::table! {
     use diesel::sql_types::*;
 
     itevda (id) {
