@@ -7,7 +7,7 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 
 use super::models::{MonthlySales, SaleItemRow, SalesSummary};
 use crate::db::DbPool;
-use crate::utils::{month_name, six_months_ago};
+use crate::utils::{get_start_date, month_name, Interval};
 
 type DbState = Arc<Mutex<Option<DbPool>>>;
 
@@ -15,7 +15,7 @@ type DbState = Arc<Mutex<Option<DbPool>>>;
 
 #[taurpc::procedures(path = "sales")]
 pub trait SalesApi {
-    async fn get_summary_by_product(procod: String) -> Result<SalesSummary, String>;
+    async fn get_summary_by_product(procod: String, interval: Interval) -> Result<SalesSummary, String>;
 }
 
 // ── Impl ──────────────────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ pub struct SalesImpl {
 
 #[taurpc::resolvers]
 impl SalesApi for SalesImpl {
-    async fn get_summary_by_product(self, procod_arg: String) -> Result<SalesSummary, String> {
+    async fn get_summary_by_product(self, procod_arg: String, interval: Interval) -> Result<SalesSummary, String> {
         let pool = self
             .db
             .lock()
@@ -41,7 +41,7 @@ impl SalesApi for SalesImpl {
 
             let mut conn = pool.get().map_err(|e| e.to_string())?;
 
-            let cutoff = six_months_ago();
+            let cutoff = get_start_date(interval);
 
             let rows: Vec<SaleItemRow> = itevda
                 .select(SaleItemRow::as_select())

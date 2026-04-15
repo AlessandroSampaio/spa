@@ -14,6 +14,7 @@ import { EntriesHistoryChart } from "../components/ui/EntriesHistoryChart";
 import { SalesHistoryChart } from "../components/ui/SalesHistoryChart";
 import { StatCard } from "../components/ui/StatCard";
 import { proforlinFilter } from "../stores/proforlinFilter";
+import { interval, INTERVAL_LABELS } from "../stores/interval";
 import { selectedProduct, setSelectedProduct } from "../stores/selectedProduct";
 import { taurpc } from "../stores/taurpc";
 
@@ -151,33 +152,51 @@ const fmtNumber = (v: number, decimals = 1) =>
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-// Compute how many days the 6-month window spans (varies by month lengths).
-const PERIOD_DAYS = (() => {
-  const today = new Date();
-  const cutoff = new Date(
-    today.getFullYear(),
-    today.getMonth() - 6,
-    today.getDate(),
-  );
-  return Math.ceil(
-    (today.getTime() - cutoff.getTime()) / (1000 * 60 * 60 * 24),
-  );
-})();
+// Approximate days per interval (used for daily-rate estimates).
+function intervalDays(iv: string): number {
+  switch (iv) {
+    case "OneWeek": return 7;
+    case "TwoWeeks": return 14;
+    case "OneMonth": return 30;
+    case "TwoMonths": return 60;
+    case "ThreeMonths": return 91;
+    case "SixMonths": return 182;
+    default: return 182;
+  }
+}
 
 export function Dashboard() {
   // ── Sales resource ────────────────────────────────────────────────────────
   const [sales] = createResource(
-    () => selectedProduct()?.procod ?? null,
-    (procod) => taurpc.sales.get_summary_by_product(procod),
+    () => {
+      const procod = selectedProduct()?.procod ?? null;
+      if (!procod) return null;
+      return { procod, interval: interval() };
+    },
+    ({ procod, interval }) =>
+      taurpc.sales.get_summary_by_product(procod, interval),
   );
 
+  const periodMonths = createMemo(() => {
+    switch (interval()) {
+      case "OneWeek": return 1 / 4;
+      case "TwoWeeks": return 1 / 2;
+      case "OneMonth": return 1;
+      case "TwoMonths": return 2;
+      case "ThreeMonths": return 3;
+      case "SixMonths": return 6;
+    }
+  });
+
   const avgMonthlyRevenue = createMemo(() =>
-    sales()?.total_sales != null ? sales()!.total_sales / 6 : null,
+    sales()?.total_sales != null
+      ? sales()!.total_sales / periodMonths()
+      : null,
   );
 
   const avgDailySalesQty = createMemo(() =>
     sales()?.quantity_sold != null
-      ? sales()!.quantity_sold / PERIOD_DAYS
+      ? sales()!.quantity_sold / intervalDays(interval())
       : null,
   );
 
@@ -197,12 +216,19 @@ export function Dashboard() {
 
   // ── Entries resource ──────────────────────────────────────────────────────
   const [entries] = createResource(
-    () => selectedProduct()?.procod ?? null,
-    (procod) => taurpc.entries.get_summary_by_product(procod),
+    () => {
+      const procod = selectedProduct()?.procod ?? null;
+      if (!procod) return null;
+      return { procod, interval: interval() };
+    },
+    ({ procod, interval }) =>
+      taurpc.entries.get_summary_by_product(procod, interval),
   );
 
   const avgMonthlyPurchaseValue = createMemo(() =>
-    entries()?.total_value != null ? entries()!.total_value / 6 : null,
+    entries()?.total_value != null
+      ? entries()!.total_value / periodMonths()
+      : null,
   );
 
   const entriesChartData = createMemo(
@@ -445,7 +471,7 @@ export function Dashboard() {
         {/* Stat cards — vendas + estoque */}
         <div class="grid grid-cols-4 gap-4">
           <StatCard
-            label="Venda Média (6 meses)"
+            label={`Venda Média (${INTERVAL_LABELS[interval()]})`}
             value={
               avgMonthlyRevenue() != null
                 ? fmtCurrency(avgMonthlyRevenue()!)
@@ -462,7 +488,7 @@ export function Dashboard() {
                 ? `${fmtNumber(avgDailySalesQty()!)} un/dia`
                 : "—"
             }
-            sublabel="últimos 6 meses"
+            sublabel={`últimos ${INTERVAL_LABELS[interval()]}`}
             icon={<IconCalendar />}
             accent="purple"
           />
@@ -489,7 +515,7 @@ export function Dashboard() {
         {/* Stat cards — compras + sugestão */}
         <div class="grid grid-cols-4 gap-4">
           <StatCard
-            label="Total Comprado (6 meses)"
+            label={`Total Comprado (${INTERVAL_LABELS[interval()]})`}
             value={
               entries()?.total_value != null
                 ? fmtCurrency(entries()!.total_value)
@@ -500,7 +526,7 @@ export function Dashboard() {
             accent="amber"
           />
           <StatCard
-            label="Qtd Comprada (6 meses)"
+            label={`Qtd Comprada (${INTERVAL_LABELS[interval()]})`}
             value={
               entries()?.quantity_purchased != null
                 ? `${fmtNumber(entries()!.quantity_purchased, 0)} un`
@@ -538,7 +564,7 @@ export function Dashboard() {
           {/* Entries history — 50% width */}
           <Show
             when={entriesChartData().length > 0}
-            fallback={<NoData label="Compras por Mês — últimos 6 meses" />}
+            fallback={<NoData label={`Compras por Mês — últimos ${INTERVAL_LABELS[interval()]}`} />}
           >
             <EntriesHistoryChart data={entriesChartData()} />
           </Show>
@@ -546,7 +572,7 @@ export function Dashboard() {
           {/* Sales history — 50% width */}
           <Show
             when={salesChartData().length > 0}
-            fallback={<NoData label="Vendas por Mês — últimos 6 meses" />}
+            fallback={<NoData label={`Vendas por Mês — últimos ${INTERVAL_LABELS[interval()]}`} />}
           >
             <SalesHistoryChart data={salesChartData()} />
           </Show>

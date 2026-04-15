@@ -8,7 +8,7 @@ use diesel::{sql_query, RunQueryDsl};
 
 use super::models::{EntriesSummary, EntryItemRow, MonthlyEntries};
 use crate::db::DbPool;
-use crate::utils::{month_name, six_months_ago};
+use crate::utils::{get_start_date, month_name, Interval};
 
 type DbState = Arc<Mutex<Option<DbPool>>>;
 
@@ -16,7 +16,7 @@ type DbState = Arc<Mutex<Option<DbPool>>>;
 
 #[taurpc::procedures(path = "entries")]
 pub trait EntriesApi {
-    async fn get_summary_by_product(procod: String) -> Result<EntriesSummary, String>;
+    async fn get_summary_by_product(procod: String, interval: Interval) -> Result<EntriesSummary, String>;
 }
 
 // ── Impl ──────────────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ pub struct EntriesImpl {
 
 #[taurpc::resolvers]
 impl EntriesApi for EntriesImpl {
-    async fn get_summary_by_product(self, procod_arg: String) -> Result<EntriesSummary, String> {
+    async fn get_summary_by_product(self, procod_arg: String, interval: Interval) -> Result<EntriesSummary, String> {
         let pool = self
             .db
             .lock()
@@ -40,7 +40,7 @@ impl EntriesApi for EntriesImpl {
         tokio::task::spawn_blocking(move || -> Result<EntriesSummary, String> {
             let mut conn = pool.get().map_err(|e| e.to_string())?;
 
-            let cutoff = six_months_ago();
+            let cutoff = get_start_date(interval);
 
             let cutoff_str = cutoff.format("%Y-%m-%d %H:%M:%S").to_string();
 

@@ -10,6 +10,8 @@ export type DbConnectionArgs = { host: string; port: string; database: string; u
 
 export type EntriesSummary = { product_id: string; quantity_purchased: number; total_value: number; monthly_entries: MonthlyEntries[] }
 
+export type Interval = "OneWeek" | "TwoWeeks" | "OneMonth" | "TwoMonths" | "ThreeMonths" | "SixMonths"
+
 export type MonthlyEntries = { month: string; quantity: number }
 
 export type MonthlySales = { month: string; quantity: number }
@@ -40,7 +42,7 @@ stock: Stock | null }
 
 export type Stock = { product_code: string; quantity: number }
 
-const ARGS_MAP = { '':'{"connect_db":["args"],"disconnect_db":[],"hello_world":[],"is_connected":[],"load_connection_config":[],"load_preferences":[],"save_connection_config":["args"],"save_preferences":["prefs"]}', 'entries':'{"get_summary_by_product":["procod"]}', 'products':'{"get_all":["filter"],"get_by_code":["procod"]}', 'sales':'{"get_summary_by_product":["procod"]}', 'similar':'{"get_by_product":["procod","include_stock","out_of_line"]}', 'stock':'{"get_by_product":["procod"]}' }
+const ARGS_MAP = { '':'{"connect_db":["args"],"disconnect_db":[],"hello_world":[],"is_connected":[],"load_connection_config":[],"load_preferences":[],"save_connection_config":["args"],"save_preferences":["prefs"]}', 'entries':'{"get_summary_by_product":["procod","interval"]}', 'products':'{"get_all":["filter"],"get_by_code":["procod"]}', 'sales':'{"get_summary_by_product":["procod","interval"]}', 'similar':'{"get_by_product":["procod","include_stock","out_of_line"]}', 'stock':'{"get_by_product":["procod"]}' }
 export type Router = { "": {connect_db: (args: DbConnectionArgs) => Promise<null>, 
 disconnect_db: () => Promise<void>, 
 hello_world: () => Promise<string>, 
@@ -49,10 +51,10 @@ load_connection_config: () => Promise<DbConnectionArgs | null>,
 load_preferences: () => Promise<AppPreferences | null>, 
 save_connection_config: (args: DbConnectionArgs) => Promise<null>, 
 save_preferences: (prefs: AppPreferences) => Promise<null>},
-"entries": {get_summary_by_product: (procod: string) => Promise<EntriesSummary>},
+"entries": {get_summary_by_product: (procod: string, interval: Interval) => Promise<EntriesSummary>},
 "products": {get_all: (filter: ProductsFilter) => Promise<Product[]>, 
 get_by_code: (procod: string) => Promise<Product | null>},
-"sales": {get_summary_by_product: (procod: string) => Promise<SalesSummary>},
+"sales": {get_summary_by_product: (procod: string, interval: Interval) => Promise<SalesSummary>},
 "similar": {get_by_product: (procod: string, includeStock: boolean, outOfLine: boolean) => Promise<SimilarGroup | null>},
 "stock": {get_by_product: (procod: string) => Promise<Stock | null>} };
 

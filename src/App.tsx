@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { check } from "@tauri-apps/plugin-updater";
 import { ProductSearch } from "./components/ui/ProductSearch";
 import { LineFilterSelect } from "./components/ui/LineFilterSelect";
+import { IntervalSelect } from "./components/ui/IntervalSelect";
 import { SettingsDialog } from "./components/forms/SettingsDialog";
 import { Dashboard } from "./pages/Dashboard";
 import { taurpc } from "./stores/taurpc";
@@ -82,6 +83,7 @@ function App() {
         <div class="flex items-center gap-2 p-4 pb-2">
           <ProductSearch />
           <LineFilterSelect />
+          <IntervalSelect />
           <SettingsDialog />
         </div>
         <Dashboard />
