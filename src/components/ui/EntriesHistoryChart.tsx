@@ -14,6 +14,7 @@ import { Card } from "./Card";
 
 interface EntriesHistoryChartProps {
   data: CostDataPoint[];
+  label: string;
 }
 
 const AMBER = "#d97706";
@@ -26,7 +27,7 @@ export function EntriesHistoryChart(props: EntriesHistoryChartProps) {
     <Card class="flex flex-col p-4">
       <div class="mb-3 flex items-center justify-between">
         <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
-          Compras por Mês — últimos 6 meses
+          {props.label}
         </span>
         <span class="text-xs text-gray-400 dark:text-gray-500">un/mês</span>
       </div>

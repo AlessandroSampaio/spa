@@ -566,7 +566,7 @@ export function Dashboard() {
             when={entriesChartData().length > 0}
             fallback={<NoData label={`Compras por Mês — últimos ${INTERVAL_LABELS[interval()]}`} />}
           >
-            <EntriesHistoryChart data={entriesChartData()} />
+            <EntriesHistoryChart data={entriesChartData()} label={`Compras por Mês — últimos ${INTERVAL_LABELS[interval()]}`} />
           </Show>
 
           {/* Sales history — 50% width */}
@@ -574,7 +574,7 @@ export function Dashboard() {
             when={salesChartData().length > 0}
             fallback={<NoData label={`Vendas por Mês — últimos ${INTERVAL_LABELS[interval()]}`} />}
           >
-            <SalesHistoryChart data={salesChartData()} />
+            <SalesHistoryChart data={salesChartData()} label={`Vendas por Mês — últimos ${INTERVAL_LABELS[interval()]}`} />
           </Show>
         </div>
       </div>
