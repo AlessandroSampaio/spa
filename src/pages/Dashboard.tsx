@@ -534,21 +534,23 @@ export function Dashboard() {
           />
         </div>
 
-        {/* Entries history — full width */}
-        <Show
-          when={entriesChartData().length > 0}
-          fallback={<NoData label="Compras por Mês — últimos 6 meses" />}
-        >
-          <EntriesHistoryChart data={entriesChartData()} />
-        </Show>
+        <div class="grid grid-cols-2 gap-4">
+          {/* Entries history — 50% width */}
+          <Show
+            when={entriesChartData().length > 0}
+            fallback={<NoData label="Compras por Mês — últimos 6 meses" />}
+          >
+            <EntriesHistoryChart data={entriesChartData()} />
+          </Show>
 
-        {/* Sales history — full width */}
-        <Show
-          when={salesChartData().length > 0}
-          fallback={<NoData label="Vendas por Mês — últimos 6 meses" />}
-        >
-          <SalesHistoryChart data={salesChartData()} />
-        </Show>
+          {/* Sales history — 50% width */}
+          <Show
+            when={salesChartData().length > 0}
+            fallback={<NoData label="Vendas por Mês — últimos 6 meses" />}
+          >
+            <SalesHistoryChart data={salesChartData()} />
+          </Show>
+        </div>
       </div>
     </div>
   );
