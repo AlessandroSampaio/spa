@@ -8,8 +8,8 @@ import { ProductSearch } from "./components/ui/ProductSearch";
 import { LineFilterSelect } from "./components/ui/LineFilterSelect";
 import { IntervalSelect } from "./components/ui/IntervalSelect";
 import { Sidebar } from "./components/ui/Sidebar";
-import { SettingsDialog } from "./components/forms/SettingsDialog";
 import { Dashboard } from "./pages/Dashboard";
+import { ShoppingList } from "./pages/ShoppingList";
 import { taurpc } from "./stores/taurpc";
 
 type UpdateState = "idle" | "downloading" | "ready";
@@ -97,12 +97,12 @@ function App() {
                 <ProductSearch />
                 <LineFilterSelect />
                 <IntervalSelect />
-                <SettingsDialog />
               </div>
               <Dashboard />
             </>
           )}
         />
+        <Route path="/lista-de-compra" component={() => <ShoppingList />} />
       </Router>
     </div>
   );

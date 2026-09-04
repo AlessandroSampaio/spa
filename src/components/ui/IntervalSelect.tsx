@@ -28,9 +28,17 @@ const ChevronIcon = () => (
   </svg>
 );
 
-export function IntervalSelect() {
+export interface IntervalSelectProps {
+  /** Controlled value. Falls back to the shared global interval store when omitted. */
+  value?: Interval;
+  /** Controlled change handler. Falls back to the shared global interval store when omitted. */
+  onChange?: (value: Interval) => void;
+}
+
+export function IntervalSelect(props: IntervalSelectProps = {}) {
+  const current = () => props.value ?? interval();
   const selected = () =>
-    INTERVAL_OPTIONS.find((o) => o.value === interval())!;
+    INTERVAL_OPTIONS.find((o) => o.value === current())!;
 
   return (
     <Select.Root<IntervalOption>
@@ -38,7 +46,7 @@ export function IntervalSelect() {
       optionValue="value"
       optionTextValue="label"
       value={selected()}
-      onChange={(opt) => opt && setInterval(opt.value)}
+      onChange={(opt) => opt && (props.onChange ?? setInterval)(opt.value)}
       itemComponent={(props) => (
         <Select.Item
           item={props.item}

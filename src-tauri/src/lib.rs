@@ -5,6 +5,7 @@ mod local_schema;
 mod products;
 mod sales;
 mod schema;
+mod shopping_lists;
 mod similar;
 mod stock;
 mod utils;
@@ -20,6 +21,7 @@ use entries::{EntriesApi, EntriesImpl};
 use local_db::LocalDbPool;
 use products::{ProductsApi, ProductsImpl};
 use sales::{SalesApi, SalesImpl};
+use shopping_lists::{ShoppingListsApi, ShoppingListsImpl};
 use similar::{SimilarApi, SimilarImpl};
 use stock::{StockApi, StockImpl};
 
@@ -256,6 +258,13 @@ pub fn run() {
             .merge(
                 EntriesImpl {
                     db: db_state.clone(),
+                }
+                .into_handler(),
+            )
+            .merge(
+                ShoppingListsImpl {
+                    db: db_state.clone(),
+                    local_db: local_db_state.clone(),
                 }
                 .into_handler(),
             )

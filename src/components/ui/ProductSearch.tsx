@@ -57,9 +57,16 @@ const fmtCurrency = (v: number) =>
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ProductSearch() {
+export interface ProductSearchProps {
+  /** Called when a product is picked. Falls back to the shared global selectedProduct store when omitted. */
+  onSelect?: (product: Product) => void;
+  placeholder?: string;
+}
+
+export function ProductSearch(props: ProductSearchProps = {}) {
   let containerRef!: HTMLDivElement;
   let listRef!: HTMLUListElement;
+  let inputRef!: HTMLInputElement;
 
   const [query, setQuery] = createSignal("");
   const [results, setResults] = createSignal<Product[]>([]);
@@ -100,8 +107,16 @@ export function ProductSearch() {
   // ── Selection ──────────────────────────────────────────────────────────────
 
   const selectItem = (item: Product) => {
-    setSelectedProduct(item);
-    setQuery((item.prodes ?? item.procod).trim());
+    if (props.onSelect) {
+      // Scoped picker (e.g. adding items to a list): clear the field and
+      // keep focus so the user can immediately search for the next item.
+      props.onSelect(item);
+      setQuery("");
+      inputRef?.focus();
+    } else {
+      setSelectedProduct(item);
+      setQuery((item.prodes ?? item.procod).trim());
+    }
     setIsOpen(false);
     setResults([]);
     setActiveIndex(-1);
@@ -180,12 +195,13 @@ export function ProductSearch() {
         </span>
 
         <input
+          ref={inputRef}
           type="search"
           value={query()}
           onInput={handleInput}
           onKeyDown={handleKeyDown}
           onFocus={handleFocus}
-          placeholder="Pesquisar produto..."
+          placeholder={props.placeholder ?? "Pesquisar produto..."}
           autocomplete="off"
           class="
             w-full rounded-md border border-gray-200 bg-white py-2 pl-9 pr-8
