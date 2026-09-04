@@ -1,11 +1,13 @@
 import "./stores/theme";
 import { createSignal, onMount, Show } from "solid-js";
+import { Route, Router } from "@solidjs/router";
 import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { check } from "@tauri-apps/plugin-updater";
 import { ProductSearch } from "./components/ui/ProductSearch";
 import { LineFilterSelect } from "./components/ui/LineFilterSelect";
 import { IntervalSelect } from "./components/ui/IntervalSelect";
+import { Sidebar } from "./components/ui/Sidebar";
 import { SettingsDialog } from "./components/forms/SettingsDialog";
 import { Dashboard } from "./pages/Dashboard";
 import { taurpc } from "./stores/taurpc";
@@ -79,15 +81,29 @@ function App() {
         )}
       </Show>
 
-      <main class="flex-1 overflow-y-auto">
-        <div class="flex items-center gap-2 p-4 pb-2">
-          <ProductSearch />
-          <LineFilterSelect />
-          <IntervalSelect />
-          <SettingsDialog />
-        </div>
-        <Dashboard />
-      </main>
+      <Router
+        root={(props) => (
+          <div class="flex min-h-0 flex-1">
+            <Sidebar />
+            <main class="flex-1 overflow-y-auto">{props.children}</main>
+          </div>
+        )}
+      >
+        <Route
+          path="/"
+          component={() => (
+            <>
+              <div class="flex items-center gap-2 p-4 pb-2">
+                <ProductSearch />
+                <LineFilterSelect />
+                <IntervalSelect />
+                <SettingsDialog />
+              </div>
+              <Dashboard />
+            </>
+          )}
+        />
+      </Router>
     </div>
   );
 }
