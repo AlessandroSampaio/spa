@@ -1,5 +1,7 @@
 mod db;
 mod entries;
+mod local_db;
+mod local_schema;
 mod products;
 mod sales;
 mod schema;
@@ -10,17 +12,19 @@ mod utils;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 
+use diesel::prelude::*;
 use tauri::Manager;
 
 use db::{build_pool, ConnectionConfig, DbPool};
 use entries::{EntriesApi, EntriesImpl};
+use local_db::LocalDbPool;
 use products::{ProductsApi, ProductsImpl};
 use sales::{SalesApi, SalesImpl};
 use similar::{SimilarApi, SimilarImpl};
 use stock::{StockApi, StockImpl};
 
 type DbState = Arc<Mutex<Option<DbPool>>>;
-type AppHandleState = Arc<OnceLock<tauri::AppHandle>>;
+type LocalDbState = Arc<OnceLock<LocalDbPool>>;
 
 #[taurpc::ipc_type]
 struct DbConnectionArgs {
@@ -59,7 +63,7 @@ trait Api {
 #[derive(Clone)]
 struct ApiImpl {
     db: DbState,
-    app_handle: AppHandleState,
+    local_db: LocalDbState,
 }
 
 #[taurpc::resolvers]
@@ -96,62 +100,124 @@ impl Api for ApiImpl {
     }
 
     async fn save_connection_config(self, args: DbConnectionArgs) -> Result<(), String> {
-        let app = self.app_handle.get().ok_or("AppHandle não disponível")?;
-        let config_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-        std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
-        let path = config_dir.join("connection.json");
-        let json = serde_json::to_string_pretty(&args).map_err(|e| e.to_string())?;
-        std::fs::write(&path, json).map_err(|e| e.to_string())?;
-        Ok(())
+        let pool = self
+            .local_db
+            .get()
+            .ok_or("Banco de dados local não disponível")?
+            .clone();
+
+        tokio::task::spawn_blocking(move || -> Result<(), String> {
+            use local_schema::connection_config::dsl::*;
+
+            let mut conn = pool.get().map_err(|e| e.to_string())?;
+            diesel::replace_into(connection_config)
+                .values((
+                    id.eq(1),
+                    host.eq(args.host),
+                    port.eq(args.port),
+                    database.eq(args.database),
+                    username.eq(args.username),
+                    password.eq(args.password),
+                ))
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
 
     async fn load_connection_config(self) -> Result<Option<DbConnectionArgs>, String> {
-        let app = self.app_handle.get().ok_or("AppHandle não disponível")?;
-        let path = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| e.to_string())?
-            .join("connection.json");
-        if !path.exists() {
-            return Ok(None);
-        }
-        let json = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        let config: DbConnectionArgs = serde_json::from_str(&json).map_err(|e| e.to_string())?;
-        Ok(Some(config))
+        let pool = self
+            .local_db
+            .get()
+            .ok_or("Banco de dados local não disponível")?
+            .clone();
+
+        tokio::task::spawn_blocking(move || -> Result<Option<DbConnectionArgs>, String> {
+            use local_schema::connection_config::dsl::*;
+
+            let mut conn = pool.get().map_err(|e| e.to_string())?;
+            connection_config
+                .select((host, port, database, username, password))
+                .filter(id.eq(1))
+                .first::<(String, String, String, String, String)>(&mut conn)
+                .optional()
+                .map(|row| {
+                    row.map(|(h, p, d, u, pw)| DbConnectionArgs {
+                        host: h,
+                        port: p,
+                        database: d,
+                        username: u,
+                        password: pw,
+                    })
+                })
+                .map_err(|e| e.to_string())
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
 
     async fn save_preferences(self, prefs: AppPreferences) -> Result<(), String> {
-        let app = self.app_handle.get().ok_or("AppHandle não disponível")?;
-        let config_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-        std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
-        let path = config_dir.join("preferences.json");
-        let json = serde_json::to_string_pretty(&prefs).map_err(|e| e.to_string())?;
-        std::fs::write(&path, json).map_err(|e| e.to_string())?;
-        Ok(())
+        let pool = self
+            .local_db
+            .get()
+            .ok_or("Banco de dados local não disponível")?
+            .clone();
+
+        tokio::task::spawn_blocking(move || -> Result<(), String> {
+            use local_schema::preferences::dsl::*;
+
+            let mut conn = pool.get().map_err(|e| e.to_string())?;
+            diesel::replace_into(preferences)
+                .values((
+                    id.eq(1),
+                    sort_field.eq(prefs.sort_field),
+                    sort_dir.eq(prefs.sort_dir),
+                ))
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
 
     async fn load_preferences(self) -> Result<Option<AppPreferences>, String> {
-        let app = self.app_handle.get().ok_or("AppHandle não disponível")?;
-        let path = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| e.to_string())?
-            .join("preferences.json");
-        if !path.exists() {
-            return Ok(None);
-        }
-        let json = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        let prefs: AppPreferences = serde_json::from_str(&json).map_err(|e| e.to_string())?;
-        Ok(Some(prefs))
+        let pool = self
+            .local_db
+            .get()
+            .ok_or("Banco de dados local não disponível")?
+            .clone();
+
+        tokio::task::spawn_blocking(move || -> Result<Option<AppPreferences>, String> {
+            use local_schema::preferences::dsl::*;
+
+            let mut conn = pool.get().map_err(|e| e.to_string())?;
+            preferences
+                .select((sort_field, sort_dir))
+                .filter(id.eq(1))
+                .first::<(String, String)>(&mut conn)
+                .optional()
+                .map(|row| {
+                    row.map(|(field, dir)| AppPreferences {
+                        sort_field: field,
+                        sort_dir: dir,
+                    })
+                })
+                .map_err(|e| e.to_string())
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let db_state: DbState = Arc::new(Mutex::new(None));
-    let app_handle: AppHandleState = Arc::new(OnceLock::new());
+    let local_db_state: LocalDbState = Arc::new(OnceLock::new());
 
-    let handle_for_setup = app_handle.clone();
+    let local_db_for_setup = local_db_state.clone();
 
     // TauRPC's Router::merge() requires a Tokio runtime context.
     let handler = tauri::async_runtime::block_on(async {
@@ -159,7 +225,7 @@ pub fn run() {
             .merge(
                 ApiImpl {
                     db: db_state.clone(),
-                    app_handle: app_handle.clone(),
+                    local_db: local_db_state.clone(),
                 }
                 .into_handler(),
             )
@@ -200,9 +266,14 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
-            // Set the AppHandle once Tauri has fully initialised it.
-            // By the time any procedure is called, this will already be set.
-            let _ = handle_for_setup.set(app.handle().clone());
+            // Local SQLite DB lives in the app-data dir and is created (and
+            // migrated) on first run. By the time any procedure is called,
+            // this will already be set.
+            let app_data_dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&app_data_dir)?;
+            let db_path = app_data_dir.join("local.sqlite");
+            let pool = local_db::build_local_pool(&db_path)?;
+            let _ = local_db_for_setup.set(pool);
             Ok(())
         })
         .invoke_handler(handler)

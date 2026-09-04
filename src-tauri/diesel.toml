@@ -1,0 +1,7 @@
+# For local (SQLite) migrations only — the Firebird schema in src/schema.rs is
+# hand-written since that database is external and not managed by Diesel CLI.
+[print_schema]
+file = "src/local_schema.rs"
+
+[migrations_directory]
+dir = "migrations"

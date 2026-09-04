@@ -25,7 +25,9 @@ serde_json = "1"
 taurpc = "0.7.1"
 specta = { version = "=2.0.0-rc.22", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
-diesel = { version = "=2.0.0", features = ["r2d2", "chrono"] }
+diesel = { version = "=2.0.0", features = ["r2d2", "chrono", "sqlite"] }
+diesel_migrations = { version = "2.0.0", features = ["sqlite"] }
+libsqlite3-sys = { version = "0.25", features = ["bundled"] }
 chrono = "0.4"
 rsfbclient-diesel = { version = "0.26.0", default-features = false, features = ["pure_rust"] }
 r2d2 = "0.8.9"
