@@ -79,6 +79,11 @@ const IconEdit = () => (
 const fmtNumber = (v: number, decimals = 1) =>
   new Intl.NumberFormat("pt-BR", { maximumFractionDigits: decimals }).format(v);
 
+const fmtCurrency = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+    v,
+  );
+
 const fmtDate = (iso: string | null) => {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-");
@@ -391,6 +396,8 @@ export function ShoppingList() {
                         <tr class="border-b border-gray-100 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:border-white/10 dark:text-gray-500">
                           <th class="px-5 py-3">Código</th>
                           <th class="px-5 py-3">Descrição</th>
+                          <th class="px-5 py-3 text-right">Preço de Custo</th>
+                          <th class="px-5 py-3 text-right">Preço de Venda</th>
                           <th class="px-5 py-3 text-right">Saldo</th>
                           <th class="px-5 py-3 text-right">Última Compra</th>
                           <th class="px-5 py-3 text-right">Venda Média Diária</th>
@@ -407,6 +414,16 @@ export function ShoppingList() {
                               </td>
                               <td class="px-5 py-3 text-gray-700 dark:text-gray-300">
                                 {item.description?.trim() ?? "—"}
+                              </td>
+                              <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                                {item.cost_price != null
+                                  ? fmtCurrency(item.cost_price)
+                                  : "—"}
+                              </td>
+                              <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                                {item.sale_price != null
+                                  ? fmtCurrency(item.sale_price)
+                                  : "—"}
                               </td>
                               <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
                                 {item.stock_balance != null

@@ -31,7 +31,7 @@ export type SalesSummary = { product_id: string; quantity_sold: number; total_sa
 
 export type ShoppingList = { id: number; name: string; created_at: string; item_count: number }
 
-export type ShoppingListItemDetail = { item_id: number; product_code: string; description: string | null; stock_balance: number | null; last_purchase_date: string | null; avg_daily_sales: number | null; suggested_purchase_qty: number | null }
+export type ShoppingListItemDetail = { item_id: number; product_code: string; description: string | null; cost_price: number | null; sale_price: number | null; stock_balance: number | null; last_purchase_date: string | null; avg_daily_sales: number | null; suggested_purchase_qty: number | null }
 
 export type SimilarGroup = { id: string; description: string | null; products: SimilarProduct[] }
 

@@ -17,6 +17,8 @@ pub struct ShoppingListItemDetail {
     pub item_id: i32,
     pub product_code: String,
     pub description: Option<String>,
+    pub cost_price: Option<f64>,
+    pub sale_price: Option<f64>,
     pub stock_balance: Option<f64>,
     pub last_purchase_date: Option<String>,
     pub avg_daily_sales: Option<f64>,

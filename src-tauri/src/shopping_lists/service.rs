@@ -294,15 +294,17 @@ impl ShoppingListsApi for ShoppingListsImpl {
         tokio::task::spawn_blocking(move || -> Result<Vec<ShoppingListItemDetail>, String> {
             let mut conn = fb_pool.get().map_err(|e| e.to_string())?;
 
-            // 2a. Descriptions (batched, same eq_any pattern as similar::service).
-            let desc_map: HashMap<String, Option<String>> = {
+            // 2a. Descriptions and current cost/sale prices (batched, same
+            // eq_any pattern as similar::service).
+            let product_map: HashMap<String, (Option<String>, Option<f64>, Option<f64>)> = {
                 use crate::schema::produto::dsl as p;
                 p::produto
                     .filter(p::procod.eq_any(&codes))
-                    .select((p::procod, p::prodes))
-                    .load::<(String, Option<String>)>(&mut *conn)
+                    .select((p::procod, p::prodes, p::proprccst, p::proprcvdavar))
+                    .load::<(String, Option<String>, Option<f64>, Option<f64>)>(&mut *conn)
                     .map_err(|e| e.to_string())?
                     .into_iter()
+                    .map(|(code, desc, cost, sale)| (code, (desc, cost, sale)))
                     .collect()
             };
 
@@ -383,6 +385,10 @@ impl ShoppingListsApi for ShoppingListsImpl {
                     let last_purchase_date = purchase_map
                         .get(&code)
                         .map(|d| d.format("%Y-%m-%d").to_string());
+                    let (description, cost_price, sale_price) = product_map
+                        .get(&code)
+                        .cloned()
+                        .unwrap_or((None, None, None));
 
                     let suggested_purchase_qty = Some(
                         (avg_daily_sales * target_stock_days as f64
@@ -393,7 +399,9 @@ impl ShoppingListsApi for ShoppingListsImpl {
 
                     ShoppingListItemDetail {
                         item_id,
-                        description: desc_map.get(&code).cloned().flatten(),
+                        description,
+                        cost_price,
+                        sale_price,
                         stock_balance,
                         last_purchase_date,
                         avg_daily_sales: Some(avg_daily_sales),
