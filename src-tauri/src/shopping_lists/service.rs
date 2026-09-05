@@ -49,6 +49,7 @@ pub trait ShoppingListsApi {
     ) -> Result<Vec<ShoppingListItemDetail>, String>;
     async fn get_purchase_parameters() -> Result<Option<PurchaseParameters>, String>;
     async fn save_purchase_parameters(params: PurchaseParameters) -> Result<(), String>;
+    async fn export_file(path: String, data: Vec<u8>) -> Result<(), String>;
 }
 
 // ── Impl ──────────────────────────────────────────────────────────────────────
@@ -459,5 +460,11 @@ impl ShoppingListsApi for ShoppingListsImpl {
         })
         .await
         .map_err(|e| e.to_string())?
+    }
+
+    async fn export_file(self, path: String, data: Vec<u8>) -> Result<(), String> {
+        tokio::task::spawn_blocking(move || std::fs::write(&path, data).map_err(|e| e.to_string()))
+            .await
+            .map_err(|e| e.to_string())?
     }
 }

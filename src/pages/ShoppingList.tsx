@@ -1,4 +1,5 @@
 import { createForm, reset, SubmitHandler, zodForm } from "@modular-forms/solid";
+import { save } from "@tauri-apps/plugin-dialog";
 import {
   createEffect,
   createMemo,
@@ -54,6 +55,24 @@ const IconTrash = () => (
   >
     <polyline points="3 6 5 6 21 6" />
     <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+const IconDownload = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
   </svg>
 );
 
@@ -199,6 +218,110 @@ export function ShoppingList() {
   const selectedList = createMemo(() =>
     lists()?.find((l) => l.id === selectedListId()),
   );
+
+  // ── Export ────────────────────────────────────────────────────────────────
+  const [exportError, setExportError] = createSignal("");
+
+  const EXPORT_HEADERS = [
+    "Código",
+    "Descrição",
+    "Preço de Custo",
+    "Preço de Venda",
+    "Saldo",
+    "Última Compra",
+    "Venda Média Diária",
+    "Sugestão de Compra",
+  ];
+
+  const handleExportPdf = async () => {
+    const list = selectedList();
+    const items = listItems() ?? [];
+    if (!list || items.length === 0) return;
+
+    setExportError("");
+    try {
+      const path = await save({
+        defaultPath: `${list.name}.pdf`,
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+      });
+      if (!path) return;
+
+      // Loaded on demand — jsPDF/autoTable are only needed when exporting.
+      const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
+
+      const doc = new jsPDF({ orientation: "landscape" });
+      doc.setFontSize(14);
+      doc.text(list.name, 14, 15);
+
+      autoTable(doc, {
+        startY: 20,
+        head: [EXPORT_HEADERS],
+        body: items.map((item) => [
+          item.product_code.trim(),
+          item.description?.trim() ?? "—",
+          item.cost_price != null ? fmtCurrency(item.cost_price) : "—",
+          item.sale_price != null ? fmtCurrency(item.sale_price) : "—",
+          item.stock_balance != null
+            ? `${fmtNumber(item.stock_balance, 0)} un`
+            : "—",
+          fmtDate(item.last_purchase_date),
+          item.avg_daily_sales != null
+            ? `${fmtNumber(item.avg_daily_sales)} un/dia`
+            : "—",
+          `${fmtNumber(suggestionFor(item), 0)} un`,
+        ]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] },
+      });
+
+      const bytes = new Uint8Array(doc.output("arraybuffer"));
+      await taurpc.shopping_lists.export_file(path, Array.from(bytes));
+    } catch (err) {
+      setExportError(String(err));
+    }
+  };
+
+  const handleExportXlsx = async () => {
+    const list = selectedList();
+    const items = listItems() ?? [];
+    if (!list || items.length === 0) return;
+
+    setExportError("");
+    try {
+      const path = await save({
+        defaultPath: `${list.name}.xlsx`,
+        filters: [{ name: "Excel", extensions: ["xlsx"] }],
+      });
+      if (!path) return;
+
+      // Loaded on demand — xlsx is only needed when exporting.
+      const XLSX = await import("xlsx");
+
+      const rows = items.map((item) => ({
+        [EXPORT_HEADERS[0]]: item.product_code.trim(),
+        [EXPORT_HEADERS[1]]: item.description?.trim() ?? "",
+        [EXPORT_HEADERS[2]]: item.cost_price,
+        [EXPORT_HEADERS[3]]: item.sale_price,
+        [EXPORT_HEADERS[4]]: item.stock_balance,
+        [EXPORT_HEADERS[5]]: item.last_purchase_date ?? "",
+        [EXPORT_HEADERS[6]]: item.avg_daily_sales,
+        [EXPORT_HEADERS[7]]: suggestionFor(item),
+      }));
+
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, "Lista de compra");
+      const bytes = new Uint8Array(
+        XLSX.write(workbook, { bookType: "xlsx", type: "array" }),
+      );
+      await taurpc.shopping_lists.export_file(path, Array.from(bytes));
+    } catch (err) {
+      setExportError(String(err));
+    }
+  };
 
   return (
     <div class="flex gap-4 p-4">
@@ -376,7 +499,32 @@ export function ShoppingList() {
                     onSelect={handleAddProduct}
                   />
                 </div>
+
+                <div class="flex shrink-0 items-center gap-1.5">
+                  <button
+                    onClick={handleExportPdf}
+                    disabled={!listItems() || listItems()!.length === 0}
+                    class="flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
+                  >
+                    <IconDownload />
+                    PDF
+                  </button>
+                  <button
+                    onClick={handleExportXlsx}
+                    disabled={!listItems() || listItems()!.length === 0}
+                    class="flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
+                  >
+                    <IconDownload />
+                    XLSX
+                  </button>
+                </div>
               </Card>
+
+              <Show when={exportError()}>
+                <p class="-mt-2 px-1 text-xs text-red-500 dark:text-red-400">
+                  Falha ao exportar: {exportError()}
+                </p>
+              </Show>
 
               {/* Items table */}
               <Card class="flex-1 overflow-hidden">
