@@ -323,35 +323,65 @@ export function ShoppingList() {
       });
       if (!path) return;
 
-      // Loaded on demand — xlsx is only needed when exporting.
-      const XLSX = await import("xlsx");
+      // Loaded on demand — exceljs is only needed when exporting.
+      const ExcelJS = (await import("exceljs")).default;
 
       const allHeaders = [...EXPORT_HEADERS, ...EXTRA_XLSX_HEADERS];
 
-      const dataRows = items.map((item) => [
-        item.product_code.trim(),
-        item.description?.trim() ?? "",
-        item.cost_price ?? "",
-        item.sale_price ?? "",
-        item.stock_balance ?? "",
-        item.last_purchase_date ?? "",
-        item.avg_daily_sales ?? "",
-        suggestionFor(item),
-        ...EXTRA_XLSX_HEADERS.map(() => ""),
-      ]);
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("Lista de compra");
 
-      const sheetData = [[fmtGeneratedAt()], allHeaders, ...dataRows];
-      const sheet = XLSX.utils.aoa_to_sheet(sheetData);
-      sheet["!merges"] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: allHeaders.length - 1 } },
+      sheet.columns = [
+        { width: 16 }, // Código
+        { width: 42 }, // Descrição
+        { width: 14 }, // Preço de Custo
+        { width: 14 }, // Preço de Venda
+        { width: 10 }, // Saldo
+        { width: 14 }, // Última Compra
+        { width: 18 }, // Venda Média Diária
+        { width: 16 }, // Sugestão de Compra
+        ...EXTRA_XLSX_HEADERS.map(() => ({ width: 14 })),
       ];
 
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, sheet, "Lista de compra");
-      const bytes = new Uint8Array(
-        XLSX.write(workbook, { bookType: "xlsx", type: "array" }),
+      // Linha 1 — banner com data/hora de geração, mesclado em todas as colunas.
+      const bannerRow = sheet.addRow([fmtGeneratedAt()]);
+      sheet.mergeCells(1, 1, 1, allHeaders.length);
+      bannerRow.height = 20;
+      bannerRow.getCell(1).font = { italic: true, bold: true, size: 11 };
+      bannerRow.getCell(1).alignment = { vertical: "middle" };
+
+      // Linha 2 — cabeçalho em destaque.
+      const headerRow = sheet.addRow(allHeaders);
+      headerRow.height = 22;
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF3B82F6" },
+        };
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+      });
+
+      for (const item of items) {
+        sheet.addRow([
+          item.product_code.trim(),
+          item.description?.trim() ?? "",
+          item.cost_price ?? "",
+          item.sale_price ?? "",
+          item.stock_balance ?? "",
+          item.last_purchase_date ?? "",
+          item.avg_daily_sales ?? "",
+          suggestionFor(item),
+          ...EXTRA_XLSX_HEADERS.map(() => ""),
+        ]);
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      await taurpc.shopping_lists.export_file(
+        path,
+        Array.from(new Uint8Array(buffer)),
       );
-      await taurpc.shopping_lists.export_file(path, Array.from(bytes));
     } catch (err) {
       setExportError(String(err));
     }
