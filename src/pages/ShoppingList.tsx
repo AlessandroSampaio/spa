@@ -233,6 +233,32 @@ export function ShoppingList() {
     "Sugestão de Compra",
   ];
 
+  // Colunas adicionadas apenas para a exportação em Excel — sem valores,
+  // preenchidas manualmente pelo usuário após a geração da planilha.
+  const EXTRA_XLSX_HEADERS = [
+    "QNT",
+    "MDL",
+    "FC",
+    "MD",
+    "K 16442",
+    "FORPAN",
+    "MA FALCAO",
+    "MIX MATEUS",
+    "J A 53084",
+    "VEI RIC",
+    "POPULAR",
+    "JCM",
+    "SERRANO",
+    "COMPARATIVO",
+    "COMPARATIV",
+  ];
+
+  const fmtGeneratedAt = () => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `Relatorio gerado em ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} as ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  };
+
   const handleExportPdf = async () => {
     const list = selectedList();
     const items = listItems() ?? [];
@@ -300,18 +326,26 @@ export function ShoppingList() {
       // Loaded on demand — xlsx is only needed when exporting.
       const XLSX = await import("xlsx");
 
-      const rows = items.map((item) => ({
-        [EXPORT_HEADERS[0]]: item.product_code.trim(),
-        [EXPORT_HEADERS[1]]: item.description?.trim() ?? "",
-        [EXPORT_HEADERS[2]]: item.cost_price,
-        [EXPORT_HEADERS[3]]: item.sale_price,
-        [EXPORT_HEADERS[4]]: item.stock_balance,
-        [EXPORT_HEADERS[5]]: item.last_purchase_date ?? "",
-        [EXPORT_HEADERS[6]]: item.avg_daily_sales,
-        [EXPORT_HEADERS[7]]: suggestionFor(item),
-      }));
+      const allHeaders = [...EXPORT_HEADERS, ...EXTRA_XLSX_HEADERS];
 
-      const sheet = XLSX.utils.json_to_sheet(rows);
+      const dataRows = items.map((item) => [
+        item.product_code.trim(),
+        item.description?.trim() ?? "",
+        item.cost_price ?? "",
+        item.sale_price ?? "",
+        item.stock_balance ?? "",
+        item.last_purchase_date ?? "",
+        item.avg_daily_sales ?? "",
+        suggestionFor(item),
+        ...EXTRA_XLSX_HEADERS.map(() => ""),
+      ]);
+
+      const sheetData = [[fmtGeneratedAt()], allHeaders, ...dataRows];
+      const sheet = XLSX.utils.aoa_to_sheet(sheetData);
+      sheet["!merges"] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: allHeaders.length - 1 } },
+      ];
+
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, sheet, "Lista de compra");
       const bytes = new Uint8Array(
