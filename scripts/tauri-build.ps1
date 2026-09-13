@@ -1,0 +1,10 @@
+$env:TAURI_SIGNING_PRIVATE_KEY = $env:TAURI_SIGNING_PRIVATE_KEY_SPA
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SPA
+
+if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+    Write-Error "TAURI_SIGNING_PRIVATE_KEY_SPA nao esta definida no ambiente do Windows."
+    exit 1
+}
+
+tauri build
+exit $LASTEXITCODE

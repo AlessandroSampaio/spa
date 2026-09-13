@@ -25,7 +25,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdCNEJDRTJGNDJGNDFEMUIKUldRYkhmUkNMODVMZTNqZVZJZTZucVdMV2hWYWxwenY4amVTMUx5ODBTeVVqOExxaGN2Z3VIZ1EK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyMTkyRjU1QUQ2NTg1ODUKUldTRmhXV3RWUzhaMG9VZ3BYdzVYTVRWWEZuYys4SkozRzg2YTgxb3hPOGluN2hPTEt0NU1DbUMK",
       "endpoints": [
         "https://github.com/AlessandroSampaio/spa/releases/latest/download/latest.json"
       ]
