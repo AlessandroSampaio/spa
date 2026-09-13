@@ -5,6 +5,14 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/)
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-13
+### Added
+-
+
+### Fixed
+-
+
+
 ## [1.2.0] - 2026-04-15
 
 ### Added
