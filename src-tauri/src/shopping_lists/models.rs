@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
-use diesel::sql_types::{Nullable, Text, Timestamp};
+use diesel::sql_types::{Double, Nullable, Text, Timestamp};
 
 // ── IPC types ─────────────────────────────────────────────────────────────────
 
@@ -23,6 +23,16 @@ pub struct ShoppingListItemDetail {
     pub last_purchase_date: Option<String>,
     pub avg_daily_sales: Option<f64>,
     pub suggested_purchase_qty: Option<f64>,
+    pub supplier_offers: Vec<SupplierOffer>,
+}
+
+#[taurpc::ipc_type]
+pub struct SupplierOffer {
+    pub supplier_code: String,
+    pub supplier_name: Option<String>,
+    pub supplier_cnpj: Option<String>,
+    pub last_purchase_date: Option<String>,
+    pub last_unit_cost: Option<f64>,
 }
 
 #[taurpc::ipc_type]
@@ -61,4 +71,20 @@ pub struct LastPurchaseRow {
     pub product_code: String,
     #[diesel(sql_type = Nullable<Timestamp>)]
     pub last_purchase: Option<NaiveDateTime>,
+}
+
+#[derive(QueryableByName)]
+pub struct SupplierOfferRow {
+    #[diesel(sql_type = Text)]
+    pub product_code: String,
+    #[diesel(sql_type = Text)]
+    pub supplier_code: String,
+    #[diesel(sql_type = Nullable<Text>)]
+    pub supplier_name: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    pub supplier_cnpj: Option<String>,
+    #[diesel(sql_type = Nullable<Timestamp>)]
+    pub last_purchase_date: Option<NaiveDateTime>,
+    #[diesel(sql_type = Nullable<Double>)]
+    pub last_unit_cost: Option<f64>,
 }

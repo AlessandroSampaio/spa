@@ -11,7 +11,7 @@ use diesel::{
 
 use super::models::{
     LastPurchaseRow, NewShoppingListItemRow, NewShoppingListRow, PurchaseParameters,
-    ShoppingList, ShoppingListItemDetail, ShoppingListRow,
+    ShoppingList, ShoppingListItemDetail, ShoppingListRow, SupplierOffer, SupplierOfferRow,
 };
 use crate::db::DbPool;
 use crate::local_db::LocalDbPool;
@@ -377,6 +377,76 @@ impl ShoppingListsApi for ShoppingListsImpl {
                 .filter_map(|r| r.last_purchase.map(|d| (r.product_code, d)))
                 .collect();
 
+            // 2e. Per-supplier offers — for each (PROCOD, FORCOD) pair
+            // registered in PRODUTO_FORNECEDOR, the most recent ENTRADA (by
+            // ENTDATEMI) with a matching ITEM_ENTRADA line, plus the
+            // supplier's name/CNPJ. Target DB is Firebird 2.5, which has no
+            // window functions (ROW_NUMBER/OVER/PARTITION BY were added in
+            // 3.0) — "most recent line" is picked instead via two correlated
+            // `SELECT FIRST 1 ... ORDER BY` scalar subqueries (ENTDOC/ITESEQ
+            // as tiebreakers for same-timestamp entries), which Firebird 2.5
+            // supports. `codes` is bound once, for the single IN clause.
+            let supplier_placeholders = codes.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+            let supplier_sql_text = format!(
+                "SELECT \
+                     pf.PROCOD AS product_code, \
+                     pf.FORCOD AS supplier_code, \
+                     f.FORFAN AS supplier_name, \
+                     f.FORCGC AS supplier_cnpj, \
+                     (SELECT FIRST 1 e.ENTDATEMI \
+                        FROM ITEM_ENTRADA ie \
+                        INNER JOIN ENTRADA e \
+                                ON e.FORCOD = ie.FORCOD AND e.ENTSER = ie.ENTSER \
+                               AND e.ENTDOC = ie.ENTDOC AND e.ENTTNF = ie.ENTTNF \
+                       WHERE ie.PROCOD = pf.PROCOD AND ie.FORCOD = pf.FORCOD \
+                       ORDER BY e.ENTDATEMI DESC, e.ENTDOC DESC, ie.ITESEQ DESC \
+                     ) AS last_purchase_date, \
+                     (SELECT FIRST 1 ie.ITEVLREMB / NULLIF(ie.ITEQTDEMB * ie.ITEUNIEMB, 0) \
+                        FROM ITEM_ENTRADA ie \
+                        INNER JOIN ENTRADA e \
+                                ON e.FORCOD = ie.FORCOD AND e.ENTSER = ie.ENTSER \
+                               AND e.ENTDOC = ie.ENTDOC AND e.ENTTNF = ie.ENTTNF \
+                       WHERE ie.PROCOD = pf.PROCOD AND ie.FORCOD = pf.FORCOD \
+                       ORDER BY e.ENTDATEMI DESC, e.ENTDOC DESC, ie.ITESEQ DESC \
+                     ) AS last_unit_cost \
+                 FROM (SELECT DISTINCT PROCOD, FORCOD FROM PRODUTO_FORNECEDOR WHERE PROCOD IN ({ph})) pf \
+                 LEFT JOIN FORNECEDOR f ON f.FORCOD = pf.FORCOD \
+                 ORDER BY pf.PROCOD, f.FORFAN, pf.FORCOD",
+                ph = supplier_placeholders
+            );
+
+            let mut supplier_query =
+                sql_query(supplier_sql_text).into_boxed::<rsfbclient_diesel::backend::Fb>();
+            for code in &codes {
+                supplier_query = supplier_query.bind::<Text, _>(code.clone());
+            }
+            let supplier_rows: Vec<SupplierOfferRow> =
+                supplier_query.load(&mut *conn).map_err(|e| e.to_string())?;
+
+            let mut supplier_offers_by_product: HashMap<String, Vec<SupplierOffer>> =
+                HashMap::new();
+            for row in supplier_rows {
+                supplier_offers_by_product
+                    .entry(row.product_code)
+                    .or_default()
+                    .push(SupplierOffer {
+                        supplier_code: row.supplier_code,
+                        supplier_name: row.supplier_name,
+                        supplier_cnpj: row.supplier_cnpj,
+                        last_purchase_date: row
+                            .last_purchase_date
+                            .map(|d| d.format("%Y-%m-%d").to_string()),
+                        last_unit_cost: row.last_unit_cost,
+                    });
+            }
+            for offers in supplier_offers_by_product.values_mut() {
+                offers.sort_by(|a, b| {
+                    a.last_unit_cost
+                        .unwrap_or(f64::MAX)
+                        .total_cmp(&b.last_unit_cost.unwrap_or(f64::MAX))
+                });
+            }
+
             // 3. Merge everything, one row per list item, preserving added_at order.
             let result = items
                 .into_iter()
@@ -390,6 +460,8 @@ impl ShoppingListsApi for ShoppingListsImpl {
                         .get(&code)
                         .cloned()
                         .unwrap_or((None, None, None));
+                    let supplier_offers =
+                        supplier_offers_by_product.remove(&code).unwrap_or_default();
 
                     let suggested_purchase_qty = Some(
                         (avg_daily_sales * target_stock_days as f64
@@ -407,6 +479,7 @@ impl ShoppingListsApi for ShoppingListsImpl {
                         last_purchase_date,
                         avg_daily_sales: Some(avg_daily_sales),
                         suggested_purchase_qty,
+                        supplier_offers,
                         product_code: code,
                     }
                 })

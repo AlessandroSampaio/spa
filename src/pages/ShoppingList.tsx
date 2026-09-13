@@ -109,6 +109,31 @@ const fmtDate = (iso: string | null) => {
   return `${d}/${m}/${y}`;
 };
 
+// Fornecedor com o menor preço de compra conhecido para o item (ignora
+// ofertas sem preço registrado em ITEM_ENTRADA).
+const getCheapestOffer = (item: ShoppingListItemDetail) =>
+  item.supplier_offers
+    .filter((o) => o.last_unit_cost != null)
+    .reduce<ShoppingListItemDetail["supplier_offers"][number] | undefined>(
+      (best, o) =>
+        !best || o.last_unit_cost! < best.last_unit_cost! ? o : best,
+      undefined,
+    );
+
+// Nomes de fornecedores distintos entre os itens, em ordem alfabética —
+// estável independente da ordem/composição dos itens na lista, usada para
+// gerar as colunas dinâmicas de comparação no export em Excel.
+const getDistinctSupplierNames = (items: ShoppingListItemDetail[]) => {
+  const names = new Set<string>();
+  for (const item of items) {
+    for (const offer of item.supplier_offers) {
+      const name = offer.supplier_name?.trim();
+      if (name) names.add(name);
+    }
+  }
+  return Array.from(names).sort((a, b) => a.localeCompare(b, "pt-BR"));
+};
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ShoppingList() {
@@ -233,25 +258,9 @@ export function ShoppingList() {
     "Sugestão de Compra",
   ];
 
-  // Colunas adicionadas apenas para a exportação em Excel — sem valores,
-  // preenchidas manualmente pelo usuário após a geração da planilha.
-  const EXTRA_XLSX_HEADERS = [
-    "QNT",
-    "MDL",
-    "FC",
-    "MD",
-    "K 16442",
-    "FORPAN",
-    "MA FALCAO",
-    "MIX MATEUS",
-    "J A 53084",
-    "VEI RIC",
-    "POPULAR",
-    "JCM",
-    "SERRANO",
-    "COMPARATIVO",
-    "COMPARATIV",
-  ];
+  // Colunas adicionadas apenas para a exportação em Excel, no final da
+  // planilha, para preenchimento manual pelo usuário.
+  const TRAILING_XLSX_HEADERS = ["COMPARATIVO", "COMPARATIV"];
 
   const fmtGeneratedAt = () => {
     const now = new Date();
@@ -326,7 +335,19 @@ export function ShoppingList() {
       // Loaded on demand — exceljs is only needed when exporting.
       const ExcelJS = (await import("exceljs")).default;
 
-      const allHeaders = [...EXPORT_HEADERS, ...EXTRA_XLSX_HEADERS];
+      // Colunas de comparação por fornecedor, geradas dinamicamente a partir
+      // dos fornecedores reais associados aos itens da lista (via
+      // PRODUTO_FORNECEDOR) — substitui a antiga lista fixa de nomes.
+      const supplierNames = getDistinctSupplierNames(items);
+      const supplierHeaders = supplierNames.flatMap((name) => [
+        `${name} - Preço`,
+        `${name} - Data`,
+      ]);
+      const allHeaders = [
+        ...EXPORT_HEADERS,
+        ...supplierHeaders,
+        ...TRAILING_XLSX_HEADERS,
+      ];
 
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("Lista de compra");
@@ -340,7 +361,8 @@ export function ShoppingList() {
         { width: 14 }, // Última Compra
         { width: 18 }, // Venda Média Diária
         { width: 16 }, // Sugestão de Compra
-        ...EXTRA_XLSX_HEADERS.map(() => ({ width: 14 })),
+        ...supplierNames.flatMap(() => [{ width: 14 }, { width: 12 }]),
+        ...TRAILING_XLSX_HEADERS.map(() => ({ width: 14 })),
       ];
 
       // Linha 1 — banner com data/hora de geração, mesclado em todas as colunas.
@@ -364,6 +386,14 @@ export function ShoppingList() {
       });
 
       for (const item of items) {
+        const offersByName = new Map(
+          item.supplier_offers.map((o) => [o.supplier_name?.trim() ?? "", o]),
+        );
+        const supplierCells = supplierNames.flatMap((name) => {
+          const offer = offersByName.get(name);
+          return [offer?.last_unit_cost ?? "", offer?.last_purchase_date ?? ""];
+        });
+
         sheet.addRow([
           item.product_code.trim(),
           item.description?.trim() ?? "",
@@ -373,7 +403,8 @@ export function ShoppingList() {
           item.last_purchase_date ?? "",
           item.avg_daily_sales ?? "",
           suggestionFor(item),
-          ...EXTRA_XLSX_HEADERS.map(() => ""),
+          ...supplierCells,
+          ...TRAILING_XLSX_HEADERS.map(() => ""),
         ]);
       }
 
@@ -614,6 +645,7 @@ export function ShoppingList() {
                           <th class="px-5 py-3 text-right">Última Compra</th>
                           <th class="px-5 py-3 text-right">Venda Média Diária</th>
                           <th class="px-5 py-3 text-right">Sugestão de Compra</th>
+                          <th class="px-5 py-3">Melhor Fornecedor</th>
                           <th class="px-5 py-3" />
                         </tr>
                       </thead>
@@ -652,6 +684,14 @@ export function ShoppingList() {
                               </td>
                               <td class="px-5 py-3 text-right tabular-nums font-medium text-amber-600 dark:text-amber-400">
                                 {fmtNumber(suggestionFor(item), 0)} un
+                              </td>
+                              <td class="px-5 py-3 text-gray-700 dark:text-gray-300">
+                                {(() => {
+                                  const offer = getCheapestOffer(item);
+                                  return offer
+                                    ? `${offer.supplier_name?.trim() ?? offer.supplier_code} — ${fmtCurrency(offer.last_unit_cost!)}`
+                                    : "—";
+                                })()}
                               </td>
                               <td class="px-5 py-3 text-right">
                                 <button

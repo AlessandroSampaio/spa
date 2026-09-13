@@ -65,6 +65,22 @@ diesel::table! {
 }
 
 diesel::table! {
+    fornecedor (forcod) {
+        forcod -> Text,
+        forfan -> Nullable<Text>,
+        forcgc -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    produto_fornecedor (procod, forcod, prfreffor) {
+        procod -> Text,
+        forcod -> Text,
+        prfreffor -> Text,
+    }
+}
+
+diesel::table! {
     produtoaux (procodaux) {
         procodaux -> Text,
         procod -> Text,
