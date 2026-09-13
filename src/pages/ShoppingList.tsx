@@ -226,6 +226,18 @@ export function ShoppingList() {
     return Math.max(0, Math.ceil(daily * targetStockDays() - stock));
   };
 
+  // ── Filtro "somente sugestão de compra > 0" ─────────────────────────────────
+  // Aplicado antes da renderização e dos exports (PDF/XLSX), para que ambos
+  // reflitam sempre o mesmo conjunto de itens visível na tela.
+  const [onlySuggested, setOnlySuggested] = createSignal(false);
+
+  const visibleItems = createMemo(() => {
+    const items = listItems() ?? [];
+    return onlySuggested()
+      ? items.filter((item) => suggestionFor(item) > 0)
+      : items;
+  });
+
   const handleAddProduct = async (product: { procod: string }) => {
     const id = selectedListId();
     if (id == null) return;
@@ -270,7 +282,7 @@ export function ShoppingList() {
 
   const handleExportPdf = async () => {
     const list = selectedList();
-    const items = listItems() ?? [];
+    const items = visibleItems();
     if (!list || items.length === 0) return;
 
     setExportError("");
@@ -321,7 +333,7 @@ export function ShoppingList() {
 
   const handleExportXlsx = async () => {
     const list = selectedList();
-    const items = listItems() ?? [];
+    const items = visibleItems();
     if (!list || items.length === 0) return;
 
     setExportError("");
@@ -588,6 +600,20 @@ export function ShoppingList() {
                   />
                 </div>
 
+                <label class="flex shrink-0 items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
+                  <input
+                    type="checkbox"
+                    checked={onlySuggested()}
+                    onChange={(e) =>
+                      setOnlySuggested(
+                        (e.currentTarget as HTMLInputElement).checked,
+                      )
+                    }
+                    class="accent-primary-500"
+                  />
+                  Somente sugestão de compra {">"} 0
+                </label>
+
                 <div class="w-72 shrink-0">
                   <ProductSearch
                     placeholder="Adicionar produto à lista..."
@@ -598,7 +624,7 @@ export function ShoppingList() {
                 <div class="flex shrink-0 items-center gap-1.5">
                   <button
                     onClick={handleExportPdf}
-                    disabled={!listItems() || listItems()!.length === 0}
+                    disabled={visibleItems().length === 0}
                     class="flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
                   >
                     <IconDownload />
@@ -606,7 +632,7 @@ export function ShoppingList() {
                   </button>
                   <button
                     onClick={handleExportXlsx}
-                    disabled={!listItems() || listItems()!.length === 0}
+                    disabled={visibleItems().length === 0}
                     class="flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
                   >
                     <IconDownload />
@@ -624,12 +650,14 @@ export function ShoppingList() {
               {/* Items table */}
               <Card class="flex-1 overflow-hidden">
                 <Show
-                  when={listItems() && listItems()!.length > 0}
+                  when={listItems() && visibleItems().length > 0}
                   fallback={
                     <p class="px-5 py-4 text-xs text-gray-400 dark:text-gray-500">
                       {listItems.loading
                         ? "Carregando…"
-                        : "Esta lista ainda não possui itens."}
+                        : (listItems()?.length ?? 0) === 0
+                          ? "Esta lista ainda não possui itens."
+                          : "Nenhum item com sugestão de compra maior que zero."}
                     </p>
                   }
                 >
@@ -650,7 +678,7 @@ export function ShoppingList() {
                         </tr>
                       </thead>
                       <tbody>
-                        <For each={listItems() ?? []}>
+                        <For each={visibleItems()}>
                           {(item) => (
                             <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5">
                               <td class="px-5 py-3 font-mono text-xs font-bold tracking-wider text-primary-500 dark:text-primary-400">
