@@ -669,7 +669,7 @@ export function ShoppingList() {
       </Card>
 
       {/* ── Main content ──────────────────────────────────────────────────── */}
-      <div class="flex min-w-0 flex-1 flex-col gap-4">
+      <div class="flex max-h-[calc(100vh-2rem)] min-w-0 flex-1 flex-col gap-4 overflow-hidden">
         <Show
           when={selectedList()}
           fallback={
@@ -767,11 +767,11 @@ export function ShoppingList() {
               </Show>
 
               {/* Items table */}
-              <Card class="flex-1 overflow-hidden">
+              <Card class="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <Show
                   when={!listItems.loading}
                   fallback={
-                    <div class="flex items-center justify-center gap-2 px-5 py-16 text-sm text-gray-400 dark:text-gray-500">
+                    <div class="flex flex-1 items-center justify-center gap-2 text-sm text-gray-400 dark:text-gray-500">
                       <IconSpinner />
                       Carregando itens…
                     </div>
@@ -787,7 +787,7 @@ export function ShoppingList() {
                       </p>
                     }
                   >
-                    <div class="overflow-x-auto">
+                    <div class="flex-1 overflow-auto">
                       <table class="w-full text-left text-sm">
                         <thead>
                           <tr class="border-b border-gray-100 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:border-white/10 dark:text-gray-500">
