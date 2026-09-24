@@ -5,6 +5,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/)
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-24
+## Added
+- Paginação da lista de itens
+- Carregamento e exportacao de dados em lotes
+- Animação de carregamento
+
+## Fixed
+- Falha no carregamento de dados quando a lista é superior a 50 itens
+
 ## [1.3.0] - 2026-09-13
 ### Added
 -
