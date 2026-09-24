@@ -94,6 +94,31 @@ const IconEdit = () => (
   </svg>
 );
 
+const IconSpinner = () => (
+  <svg
+    class="animate-spin"
+    xmlns="http://www.w3.org/2000/svg"
+    width="20"
+    height="20"
+    fill="none"
+    viewBox="0 0 24 24"
+  >
+    <circle
+      class="opacity-25"
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      stroke-width="4"
+    />
+    <path
+      class="opacity-75"
+      fill="currentColor"
+      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+    />
+  </svg>
+);
+
 // ── Formatters ────────────────────────────────────────────────────────────────
 
 const fmtNumber = (v: number, decimals = 1) =>
@@ -744,119 +769,127 @@ export function ShoppingList() {
               {/* Items table */}
               <Card class="flex-1 overflow-hidden">
                 <Show
-                  when={listItems() && pageItems().length > 0}
+                  when={!listItems.loading}
                   fallback={
-                    <p class="px-5 py-4 text-xs text-gray-400 dark:text-gray-500">
-                      {listItems.loading
-                        ? "Carregando…"
-                        : list().item_count === 0
-                          ? "Esta lista ainda não possui itens."
-                          : "Nenhum item com sugestão de compra maior que zero."}
-                    </p>
+                    <div class="flex items-center justify-center gap-2 px-5 py-16 text-sm text-gray-400 dark:text-gray-500">
+                      <IconSpinner />
+                      Carregando itens…
+                    </div>
                   }
                 >
-                  <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm">
-                      <thead>
-                        <tr class="border-b border-gray-100 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:border-white/10 dark:text-gray-500">
-                          <th class="px-5 py-3">Código</th>
-                          <th class="px-5 py-3">Descrição</th>
-                          <th class="px-5 py-3 text-right">Preço de Custo</th>
-                          <th class="px-5 py-3 text-right">Preço de Venda</th>
-                          <th class="px-5 py-3 text-right">Saldo</th>
-                          <th class="px-5 py-3 text-right">Última Compra</th>
-                          <th class="px-5 py-3 text-right">Venda Média Diária</th>
-                          <th class="px-5 py-3 text-right">Sugestão de Compra</th>
-                          <th class="px-5 py-3">Melhor Fornecedor</th>
-                          <th class="px-5 py-3" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <For each={pageItems()}>
-                          {(item) => (
-                            <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5">
-                              <td class="px-5 py-3 font-mono text-xs font-bold tracking-wider text-primary-500 dark:text-primary-400">
-                                {item.product_code.trim()}
-                              </td>
-                              <td class="px-5 py-3 text-gray-700 dark:text-gray-300">
-                                {item.description?.trim() ?? "—"}
-                              </td>
-                              <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
-                                {item.cost_price != null
-                                  ? fmtCurrency(item.cost_price)
-                                  : "—"}
-                              </td>
-                              <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
-                                {item.sale_price != null
-                                  ? fmtCurrency(item.sale_price)
-                                  : "—"}
-                              </td>
-                              <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
-                                {item.stock_balance != null
-                                  ? `${fmtNumber(item.stock_balance, 0)} un`
-                                  : "—"}
-                              </td>
-                              <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
-                                {fmtDate(item.last_purchase_date)}
-                              </td>
-                              <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
-                                {item.avg_daily_sales != null
-                                  ? `${fmtNumber(item.avg_daily_sales)} un/dia`
-                                  : "—"}
-                              </td>
-                              <td class="px-5 py-3 text-right tabular-nums font-medium text-amber-600 dark:text-amber-400">
-                                {fmtNumber(item.suggested_purchase_qty ?? 0, 0)} un
-                              </td>
-                              <td class="px-5 py-3 text-gray-700 dark:text-gray-300">
-                                {(() => {
-                                  const offer = getCheapestOffer(item);
-                                  return offer
-                                    ? `${offer.supplier_name?.trim() ?? offer.supplier_code} — ${fmtCurrency(offer.last_unit_cost!)}`
-                                    : "—";
-                                })()}
-                              </td>
-                              <td class="px-5 py-3 text-right">
-                                <button
-                                  class="rounded p-1 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
-                                  title="Remover da lista"
-                                  onClick={() => handleRemoveItem(item.item_id)}
-                                >
-                                  <IconTrash />
-                                </button>
-                              </td>
-                            </tr>
-                          )}
-                        </For>
-                      </tbody>
-                    </table>
-                  </div>
-                </Show>
-
-                <Show when={totalCount() > PAGE_SIZE}>
-                  <div class="flex items-center justify-between border-t border-gray-100 px-5 py-3 text-xs text-gray-500 dark:border-white/10 dark:text-gray-400">
-                    <span>
-                      Página {page() + 1} de {totalPages()} ({totalCount()}{" "}
-                      itens)
-                    </span>
-                    <div class="flex items-center gap-2">
-                      <button
-                        onClick={() => setPage((p) => Math.max(0, p - 1))}
-                        disabled={page() === 0}
-                        class="rounded-md border border-gray-200 px-2.5 py-1 font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
-                      >
-                        Anterior
-                      </button>
-                      <button
-                        onClick={() =>
-                          setPage((p) => Math.min(totalPages() - 1, p + 1))
-                        }
-                        disabled={page() + 1 >= totalPages()}
-                        class="rounded-md border border-gray-200 px-2.5 py-1 font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
-                      >
-                        Próxima
-                      </button>
+                  <Show
+                    when={pageItems().length > 0}
+                    fallback={
+                      <p class="px-5 py-4 text-xs text-gray-400 dark:text-gray-500">
+                        {list().item_count === 0
+                          ? "Esta lista ainda não possui itens."
+                          : "Nenhum item com sugestão de compra maior que zero."}
+                      </p>
+                    }
+                  >
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-left text-sm">
+                        <thead>
+                          <tr class="border-b border-gray-100 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:border-white/10 dark:text-gray-500">
+                            <th class="px-5 py-3">Código</th>
+                            <th class="px-5 py-3">Descrição</th>
+                            <th class="px-5 py-3 text-right">Preço de Custo</th>
+                            <th class="px-5 py-3 text-right">Preço de Venda</th>
+                            <th class="px-5 py-3 text-right">Saldo</th>
+                            <th class="px-5 py-3 text-right">Última Compra</th>
+                            <th class="px-5 py-3 text-right">Venda Média Diária</th>
+                            <th class="px-5 py-3 text-right">Sugestão de Compra</th>
+                            <th class="px-5 py-3">Melhor Fornecedor</th>
+                            <th class="px-5 py-3" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <For each={pageItems()}>
+                            {(item) => (
+                              <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5">
+                                <td class="px-5 py-3 font-mono text-xs font-bold tracking-wider text-primary-500 dark:text-primary-400">
+                                  {item.product_code.trim()}
+                                </td>
+                                <td class="px-5 py-3 text-gray-700 dark:text-gray-300">
+                                  {item.description?.trim() ?? "—"}
+                                </td>
+                                <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                                  {item.cost_price != null
+                                    ? fmtCurrency(item.cost_price)
+                                    : "—"}
+                                </td>
+                                <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                                  {item.sale_price != null
+                                    ? fmtCurrency(item.sale_price)
+                                    : "—"}
+                                </td>
+                                <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                                  {item.stock_balance != null
+                                    ? `${fmtNumber(item.stock_balance, 0)} un`
+                                    : "—"}
+                                </td>
+                                <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                                  {fmtDate(item.last_purchase_date)}
+                                </td>
+                                <td class="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                                  {item.avg_daily_sales != null
+                                    ? `${fmtNumber(item.avg_daily_sales)} un/dia`
+                                    : "—"}
+                                </td>
+                                <td class="px-5 py-3 text-right tabular-nums font-medium text-amber-600 dark:text-amber-400">
+                                  {fmtNumber(item.suggested_purchase_qty ?? 0, 0)} un
+                                </td>
+                                <td class="px-5 py-3 text-gray-700 dark:text-gray-300">
+                                  {(() => {
+                                    const offer = getCheapestOffer(item);
+                                    return offer
+                                      ? `${offer.supplier_name?.trim() ?? offer.supplier_code} — ${fmtCurrency(offer.last_unit_cost!)}`
+                                      : "—";
+                                  })()}
+                                </td>
+                                <td class="px-5 py-3 text-right">
+                                  <button
+                                    class="rounded p-1 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
+                                    title="Remover da lista"
+                                    onClick={() => handleRemoveItem(item.item_id)}
+                                  >
+                                    <IconTrash />
+                                  </button>
+                                </td>
+                              </tr>
+                            )}
+                          </For>
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
+                  </Show>
+
+                  <Show when={totalCount() > PAGE_SIZE}>
+                    <div class="flex items-center justify-between border-t border-gray-100 px-5 py-3 text-xs text-gray-500 dark:border-white/10 dark:text-gray-400">
+                      <span>
+                        Página {page() + 1} de {totalPages()} ({totalCount()}{" "}
+                        itens)
+                      </span>
+                      <div class="flex items-center gap-2">
+                        <button
+                          onClick={() => setPage((p) => Math.max(0, p - 1))}
+                          disabled={page() === 0}
+                          class="rounded-md border border-gray-200 px-2.5 py-1 font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
+                        >
+                          Anterior
+                        </button>
+                        <button
+                          onClick={() =>
+                            setPage((p) => Math.min(totalPages() - 1, p + 1))
+                          }
+                          disabled={page() + 1 >= totalPages()}
+                          class="rounded-md border border-gray-200 px-2.5 py-1 font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
+                        >
+                          Próxima
+                        </button>
+                      </div>
+                    </div>
+                  </Show>
                 </Show>
               </Card>
             </>
