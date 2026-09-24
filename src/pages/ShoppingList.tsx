@@ -7,6 +7,7 @@ import {
   createSignal,
   For,
   Show,
+  onCleanup,
   onMount,
 } from "solid-js";
 import type { ShoppingListItemDetail } from "../bindings";
@@ -134,6 +135,11 @@ const getDistinctSupplierNames = (items: ShoppingListItemDetail[]) => {
   return Array.from(names).sort((a, b) => a.localeCompare(b, "pt-BR"));
 };
 
+// ── Pagination ────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 25;
+const EXPORT_CHUNK = 100;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ShoppingList() {
@@ -157,6 +163,33 @@ export function ShoppingList() {
     taurpc.shopping_lists.save_purchase_parameters({
       target_stock_days: targetStockDays(),
     });
+  });
+
+  // Versão "debounced" de targetStockDays, usada apenas para disparar a busca
+  // paginada — evita refazer a consulta ao Firebird a cada tecla digitada no
+  // campo "Dias de cobertura".
+  const [debouncedTargetStockDays, setDebouncedTargetStockDays] =
+    createSignal(targetStockDays());
+
+  createEffect(() => {
+    const value = targetStockDays();
+    const timeout = setTimeout(() => setDebouncedTargetStockDays(value), 400);
+    onCleanup(() => clearTimeout(timeout));
+  });
+
+  // ── Paginação e filtro da tabela de itens ────────────────────────────────────
+  const [page, setPage] = createSignal(0);
+  const [onlySuggested, setOnlySuggested] = createSignal(false);
+
+  // Volta para a primeira página sempre que lista, intervalo, filtro ou
+  // parâmetro de cobertura mudam — a página atual pode não existir mais no
+  // novo conjunto de resultados.
+  createEffect(() => {
+    selectedListId();
+    listInterval();
+    onlySuggested();
+    debouncedTargetStockDays();
+    setPage(0);
   });
 
   // ── Lists ─────────────────────────────────────────────────────────────────
@@ -208,34 +241,45 @@ export function ShoppingList() {
   };
 
   // ── List items ────────────────────────────────────────────────────────────
+  // Paginado no backend: a query de ofertas por fornecedor (fan-out por
+  // produto×fornecedor) só roda para os itens da página atual, não para a
+  // lista inteira — é isso que evita o travamento em listas grandes (~500+
+  // itens). O filtro "somente sugestão > 0" também é aplicado no backend,
+  // antes da paginação, para que a contagem de páginas fique correta.
   const [listItems, { refetch: refetchItems }] = createResource(
     () => {
       const id = selectedListId();
       if (id == null) return null;
-      return { id, iv: listInterval() };
+      return {
+        id,
+        iv: listInterval(),
+        days: debouncedTargetStockDays(),
+        onlySug: onlySuggested(),
+        pg: page(),
+      };
     },
-    ({ id, iv }) =>
-      taurpc.shopping_lists.get_list_items(id, iv, targetStockDays()),
+    ({ id, iv, days, onlySug, pg }) =>
+      taurpc.shopping_lists.get_list_items(
+        id,
+        iv,
+        days,
+        onlySug,
+        PAGE_SIZE,
+        pg * PAGE_SIZE,
+      ),
   );
 
-  // Sugestão de compra recalculada no cliente para refletir mudanças no
-  // parâmetro de dias de cobertura sem precisar refazer a consulta ao Firebird.
-  const suggestionFor = (item: ShoppingListItemDetail) => {
-    const daily = item.avg_daily_sales ?? 0;
-    const stock = item.stock_balance ?? 0;
-    return Math.max(0, Math.ceil(daily * targetStockDays() - stock));
-  };
+  const pageItems = createMemo(() => listItems()?.items ?? []);
+  const totalCount = createMemo(() => listItems()?.total ?? 0);
+  const totalPages = createMemo(() =>
+    Math.max(1, Math.ceil(totalCount() / PAGE_SIZE)),
+  );
 
-  // ── Filtro "somente sugestão de compra > 0" ─────────────────────────────────
-  // Aplicado antes da renderização e dos exports (PDF/XLSX), para que ambos
-  // reflitam sempre o mesmo conjunto de itens visível na tela.
-  const [onlySuggested, setOnlySuggested] = createSignal(false);
-
-  const visibleItems = createMemo(() => {
-    const items = listItems() ?? [];
-    return onlySuggested()
-      ? items.filter((item) => suggestionFor(item) > 0)
-      : items;
+  // Mantém a página dentro do intervalo válido (ex: após remover o último
+  // item de uma página, ou o filtro reduzir o total).
+  createEffect(() => {
+    const maxPage = totalPages() - 1;
+    if (page() > maxPage) setPage(maxPage);
   });
 
   const handleAddProduct = async (product: { procod: string }) => {
@@ -258,6 +302,38 @@ export function ShoppingList() {
 
   // ── Export ────────────────────────────────────────────────────────────────
   const [exportError, setExportError] = createSignal("");
+  const [exportProgress, setExportProgress] = createSignal<{
+    done: number;
+    total: number;
+  } | null>(null);
+
+  // Exportação cobre a lista inteira (filtrada por "somente sugestão > 0"
+  // quando ativo), não só a página atual — busca em lotes sequenciais para
+  // não repetir a mesma query gigante que travava a tela.
+  const fetchAllItemsForExport = async (): Promise<
+    ShoppingListItemDetail[]
+  > => {
+    const id = selectedListId();
+    if (id == null) return [];
+
+    const collected: ShoppingListItemDetail[] = [];
+    let offset = 0;
+    for (;;) {
+      const chunk = await taurpc.shopping_lists.get_list_items(
+        id,
+        listInterval(),
+        debouncedTargetStockDays(),
+        onlySuggested(),
+        EXPORT_CHUNK,
+        offset,
+      );
+      collected.push(...chunk.items);
+      setExportProgress({ done: collected.length, total: chunk.total });
+      offset += EXPORT_CHUNK;
+      if (chunk.items.length === 0 || collected.length >= chunk.total) break;
+    }
+    return collected;
+  };
 
   const EXPORT_HEADERS = [
     "Código",
@@ -282,8 +358,7 @@ export function ShoppingList() {
 
   const handleExportPdf = async () => {
     const list = selectedList();
-    const items = visibleItems();
-    if (!list || items.length === 0) return;
+    if (!list || totalCount() === 0) return;
 
     setExportError("");
     try {
@@ -292,6 +367,10 @@ export function ShoppingList() {
         filters: [{ name: "PDF", extensions: ["pdf"] }],
       });
       if (!path) return;
+
+      setExportProgress({ done: 0, total: totalCount() });
+      const items = await fetchAllItemsForExport();
+      if (items.length === 0) return;
 
       // Loaded on demand — jsPDF/autoTable are only needed when exporting.
       const [{ jsPDF }, { default: autoTable }] = await Promise.all([
@@ -318,7 +397,7 @@ export function ShoppingList() {
           item.avg_daily_sales != null
             ? `${fmtNumber(item.avg_daily_sales)} un/dia`
             : "—",
-          `${fmtNumber(suggestionFor(item), 0)} un`,
+          `${fmtNumber(item.suggested_purchase_qty ?? 0, 0)} un`,
         ]),
         styles: { fontSize: 8 },
         headStyles: { fillColor: [59, 130, 246] },
@@ -328,13 +407,14 @@ export function ShoppingList() {
       await taurpc.shopping_lists.export_file(path, Array.from(bytes));
     } catch (err) {
       setExportError(String(err));
+    } finally {
+      setExportProgress(null);
     }
   };
 
   const handleExportXlsx = async () => {
     const list = selectedList();
-    const items = visibleItems();
-    if (!list || items.length === 0) return;
+    if (!list || totalCount() === 0) return;
 
     setExportError("");
     try {
@@ -343,6 +423,10 @@ export function ShoppingList() {
         filters: [{ name: "Excel", extensions: ["xlsx"] }],
       });
       if (!path) return;
+
+      setExportProgress({ done: 0, total: totalCount() });
+      const items = await fetchAllItemsForExport();
+      if (items.length === 0) return;
 
       // Loaded on demand — exceljs is only needed when exporting.
       const ExcelJS = (await import("exceljs")).default;
@@ -414,7 +498,7 @@ export function ShoppingList() {
           item.stock_balance ?? "",
           item.last_purchase_date ?? "",
           item.avg_daily_sales ?? "",
-          suggestionFor(item),
+          item.suggested_purchase_qty ?? 0,
           ...supplierCells,
           ...TRAILING_XLSX_HEADERS.map(() => ""),
         ]);
@@ -427,6 +511,8 @@ export function ShoppingList() {
       );
     } catch (err) {
       setExportError(String(err));
+    } finally {
+      setExportProgress(null);
     }
   };
 
@@ -624,7 +710,7 @@ export function ShoppingList() {
                 <div class="flex shrink-0 items-center gap-1.5">
                   <button
                     onClick={handleExportPdf}
-                    disabled={visibleItems().length === 0}
+                    disabled={totalCount() === 0}
                     class="flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
                   >
                     <IconDownload />
@@ -632,7 +718,7 @@ export function ShoppingList() {
                   </button>
                   <button
                     onClick={handleExportXlsx}
-                    disabled={visibleItems().length === 0}
+                    disabled={totalCount() === 0}
                     class="flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
                   >
                     <IconDownload />
@@ -647,15 +733,23 @@ export function ShoppingList() {
                 </p>
               </Show>
 
+              <Show when={exportProgress()}>
+                {(p) => (
+                  <p class="-mt-2 px-1 text-xs text-gray-400 dark:text-gray-500">
+                    Exportando… {p().done}/{p().total}
+                  </p>
+                )}
+              </Show>
+
               {/* Items table */}
               <Card class="flex-1 overflow-hidden">
                 <Show
-                  when={listItems() && visibleItems().length > 0}
+                  when={listItems() && pageItems().length > 0}
                   fallback={
                     <p class="px-5 py-4 text-xs text-gray-400 dark:text-gray-500">
                       {listItems.loading
                         ? "Carregando…"
-                        : (listItems()?.length ?? 0) === 0
+                        : list().item_count === 0
                           ? "Esta lista ainda não possui itens."
                           : "Nenhum item com sugestão de compra maior que zero."}
                     </p>
@@ -678,7 +772,7 @@ export function ShoppingList() {
                         </tr>
                       </thead>
                       <tbody>
-                        <For each={visibleItems()}>
+                        <For each={pageItems()}>
                           {(item) => (
                             <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5">
                               <td class="px-5 py-3 font-mono text-xs font-bold tracking-wider text-primary-500 dark:text-primary-400">
@@ -711,7 +805,7 @@ export function ShoppingList() {
                                   : "—"}
                               </td>
                               <td class="px-5 py-3 text-right tabular-nums font-medium text-amber-600 dark:text-amber-400">
-                                {fmtNumber(suggestionFor(item), 0)} un
+                                {fmtNumber(item.suggested_purchase_qty ?? 0, 0)} un
                               </td>
                               <td class="px-5 py-3 text-gray-700 dark:text-gray-300">
                                 {(() => {
@@ -735,6 +829,33 @@ export function ShoppingList() {
                         </For>
                       </tbody>
                     </table>
+                  </div>
+                </Show>
+
+                <Show when={totalCount() > PAGE_SIZE}>
+                  <div class="flex items-center justify-between border-t border-gray-100 px-5 py-3 text-xs text-gray-500 dark:border-white/10 dark:text-gray-400">
+                    <span>
+                      Página {page() + 1} de {totalPages()} ({totalCount()}{" "}
+                      itens)
+                    </span>
+                    <div class="flex items-center gap-2">
+                      <button
+                        onClick={() => setPage((p) => Math.max(0, p - 1))}
+                        disabled={page() === 0}
+                        class="rounded-md border border-gray-200 px-2.5 py-1 font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
+                      >
+                        Anterior
+                      </button>
+                      <button
+                        onClick={() =>
+                          setPage((p) => Math.min(totalPages() - 1, p + 1))
+                        }
+                        disabled={page() + 1 >= totalPages()}
+                        class="rounded-md border border-gray-200 px-2.5 py-1 font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
+                      >
+                        Próxima
+                      </button>
+                    </div>
                   </div>
                 </Show>
               </Card>

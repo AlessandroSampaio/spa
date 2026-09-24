@@ -27,6 +27,12 @@ pub struct ShoppingListItemDetail {
 }
 
 #[taurpc::ipc_type]
+pub struct ShoppingListItemsPage {
+    pub items: Vec<ShoppingListItemDetail>,
+    pub total: i32,
+}
+
+#[taurpc::ipc_type]
 pub struct SupplierOffer {
     pub supplier_code: String,
     pub supplier_name: Option<String>,

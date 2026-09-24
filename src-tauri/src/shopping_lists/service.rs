@@ -11,7 +11,8 @@ use diesel::{
 
 use super::models::{
     LastPurchaseRow, NewShoppingListItemRow, NewShoppingListRow, PurchaseParameters,
-    ShoppingList, ShoppingListItemDetail, ShoppingListRow, SupplierOffer, SupplierOfferRow,
+    ShoppingList, ShoppingListItemDetail, ShoppingListItemsPage, ShoppingListRow, SupplierOffer,
+    SupplierOfferRow,
 };
 use crate::db::DbPool;
 use crate::local_db::LocalDbPool;
@@ -19,6 +20,52 @@ use crate::utils::{get_start_date, Interval};
 
 type DbState = Arc<Mutex<Option<DbPool>>>;
 type LocalDbState = Arc<OnceLock<LocalDbPool>>;
+
+// Stock balances query, batched over a given set of codes. `estoque.procod`
+// can be a different fixed width than `produto.procod` (Firebird CHAR
+// columns), so SQL filtering matches fine (CHAR comparison ignores trailing
+// spaces) but the raw returned string must be trimmed before use as a Rust
+// HashMap key, or lookups silently miss.
+fn query_stock_map(
+    conn: &mut rsfbclient_diesel::FbConnection,
+    codes: &[String],
+) -> Result<HashMap<String, f64>, String> {
+    use crate::schema::estoque::dsl as e;
+    Ok(e::estoque
+        .filter(e::procod.eq_any(codes))
+        .select((e::procod, e::estatusdo))
+        .load::<(String, f64)>(conn)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|(code, balance)| (code.trim().to_string(), balance))
+        .collect())
+}
+
+fn query_sales_map(
+    conn: &mut rsfbclient_diesel::FbConnection,
+    codes: &[String],
+    cutoff: NaiveDateTime,
+    days: f64,
+) -> Result<HashMap<String, f64>, String> {
+    use crate::schema::itevda::dsl as s;
+    let rows: Vec<(Option<String>, Option<f64>)> = s::itevda
+        .filter(s::procod.eq_any(codes))
+        .filter(s::trndat.ge(cutoff))
+        .select((s::procod, s::itvqtdvda))
+        .load(conn)
+        .map_err(|e| e.to_string())?;
+
+    let mut totals: HashMap<String, f64> = HashMap::new();
+    for (code, qty) in rows {
+        if let Some(code) = code {
+            *totals.entry(code.trim().to_string()).or_insert(0.0) += qty.unwrap_or(0.0);
+        }
+    }
+    Ok(totals
+        .into_iter()
+        .map(|(code, total)| (code, total / days))
+        .collect())
+}
 
 // Approximate days per interval — mirrors `intervalDays()` in Dashboard.tsx.
 fn interval_days(interval: &Interval) -> f64 {
@@ -46,7 +93,10 @@ pub trait ShoppingListsApi {
         list_id: i32,
         interval: Interval,
         target_stock_days: i32,
-    ) -> Result<Vec<ShoppingListItemDetail>, String>;
+        only_suggested: bool,
+        limit: i32,
+        offset: i32,
+    ) -> Result<ShoppingListItemsPage, String>;
     async fn get_purchase_parameters() -> Result<Option<PurchaseParameters>, String>;
     async fn save_purchase_parameters(params: PurchaseParameters) -> Result<(), String>;
     async fn export_file(path: String, data: Vec<u8>) -> Result<(), String>;
@@ -253,7 +303,10 @@ impl ShoppingListsApi for ShoppingListsImpl {
         list_id_arg: i32,
         interval: Interval,
         target_stock_days: i32,
-    ) -> Result<Vec<ShoppingListItemDetail>, String> {
+        only_suggested: bool,
+        limit: i32,
+        offset: i32,
+    ) -> Result<ShoppingListItemsPage, String> {
         // 1. Load (item_id, product_code) pairs for this list from local SQLite.
         let local_pool = self
             .local_db
@@ -277,11 +330,26 @@ impl ShoppingListsApi for ShoppingListsImpl {
         .await
         .map_err(|e| e.to_string())??;
 
+        // Product codes stored here originate from Firebird `produto.procod`
+        // (a fixed-width CHAR column) and may carry trailing padding that
+        // doesn't match the width of the same logical code in other tables
+        // (`estoque`, `itevda`, etc). Trim once, up front, so every code used
+        // below (as a HashMap key or a query bind) is consistent.
+        let items: Vec<(i32, String)> = items
+            .into_iter()
+            .map(|(id, code)| (id, code.trim().to_string()))
+            .collect();
+
         if items.is_empty() {
-            return Ok(vec![]);
+            return Ok(ShoppingListItemsPage {
+                items: vec![],
+                total: 0,
+            });
         }
 
-        let codes: Vec<String> = items.iter().map(|(_, code)| code.clone()).collect();
+        let all_codes: Vec<String> = items.iter().map(|(_, code)| code.clone()).collect();
+        let limit = (limit.max(1) as usize).min(500);
+        let offset = offset.max(0) as usize;
 
         // 2. Batch-query Firebird for description/stock/sales/last purchase.
         let fb_pool = self
@@ -292,10 +360,81 @@ impl ShoppingListsApi for ShoppingListsImpl {
             .ok_or("Sem conexão com o banco de dados")?
             .clone();
 
-        tokio::task::spawn_blocking(move || -> Result<Vec<ShoppingListItemDetail>, String> {
+        tokio::task::spawn_blocking(move || -> Result<ShoppingListItemsPage, String> {
             let mut conn = fb_pool.get().map_err(|e| e.to_string())?;
 
-            // 2a. Descriptions and current cost/sale prices (batched, same
+            let cutoff = get_start_date(interval.clone());
+            let days = interval_days(&interval);
+
+            // `only_suggested` needs stock/sales for the WHOLE list to filter
+            // and paginate correctly — that's the expensive path (itevda has
+            // no index bounding this well). Without the filter, the total is
+            // just the list's item count and stock/sales only need to cover
+            // the current page.
+            let (stock_map, sales_map, filtered_items): (
+                HashMap<String, f64>,
+                HashMap<String, f64>,
+                Vec<(i32, String)>,
+            ) = if only_suggested {
+                let stock_map = query_stock_map(&mut conn, &all_codes)?;
+                let sales_map = query_sales_map(&mut conn, &all_codes, cutoff, days)?;
+
+                let suggestion_for = |code: &str| -> f64 {
+                    let stock_balance = stock_map.get(code).copied().unwrap_or(0.0);
+                    let avg_daily_sales = sales_map.get(code).copied().unwrap_or(0.0);
+                    (avg_daily_sales * target_stock_days as f64 - stock_balance)
+                        .max(0.0)
+                        .ceil()
+                };
+
+                let filtered = items
+                    .into_iter()
+                    .filter(|(_, code)| suggestion_for(code) > 0.0)
+                    .collect();
+                (stock_map, sales_map, filtered)
+            } else {
+                (HashMap::new(), HashMap::new(), items)
+            };
+
+            let total = filtered_items.len() as i32;
+            let page_items: Vec<(i32, String)> = filtered_items
+                .into_iter()
+                .skip(offset)
+                .take(limit)
+                .collect();
+
+            if page_items.is_empty() {
+                return Ok(ShoppingListItemsPage {
+                    items: vec![],
+                    total,
+                });
+            }
+
+            // From here on, only the current page's codes are used — this is
+            // what bounds the cost of the expensive queries below (2c-2e) to
+            // `limit` items instead of the whole list.
+            let codes: Vec<String> = page_items.iter().map(|(_, code)| code.clone()).collect();
+
+            // When the filter above didn't already cover the whole list,
+            // stock/sales were never queried — do it now, but scoped to just
+            // the current page's codes (cheap).
+            let (stock_map, sales_map) = if only_suggested {
+                (stock_map, sales_map)
+            } else {
+                let stock_map = query_stock_map(&mut conn, &codes)?;
+                let sales_map = query_sales_map(&mut conn, &codes, cutoff, days)?;
+                (stock_map, sales_map)
+            };
+
+            let suggestion_for = |code: &str| -> f64 {
+                let stock_balance = stock_map.get(code).copied().unwrap_or(0.0);
+                let avg_daily_sales = sales_map.get(code).copied().unwrap_or(0.0);
+                (avg_daily_sales * target_stock_days as f64 - stock_balance)
+                    .max(0.0)
+                    .ceil()
+            };
+
+            // 2c. Descriptions and current cost/sale prices (batched, same
             // eq_any pattern as similar::service).
             let product_map: HashMap<String, (Option<String>, Option<f64>, Option<f64>)> = {
                 use crate::schema::produto::dsl as p;
@@ -305,52 +444,14 @@ impl ShoppingListsApi for ShoppingListsImpl {
                     .load::<(String, Option<String>, Option<f64>, Option<f64>)>(&mut *conn)
                     .map_err(|e| e.to_string())?
                     .into_iter()
-                    .map(|(code, desc, cost, sale)| (code, (desc, cost, sale)))
+                    .map(|(code, desc, cost, sale)| (code.trim().to_string(), (desc, cost, sale)))
                     .collect()
             };
 
-            // 2b. Stock balances (batched, same eq_any pattern as similar::service).
-            let stock_map: HashMap<String, f64> = {
-                use crate::schema::estoque::dsl as e;
-                e::estoque
-                    .filter(e::procod.eq_any(&codes))
-                    .select((e::procod, e::estatusdo))
-                    .load::<(String, f64)>(&mut *conn)
-                    .map_err(|e| e.to_string())?
-                    .into_iter()
-                    .collect()
-            };
-
-            // 2c. Average daily sales within the selected interval — one
-            // batched query over itevda, aggregated in Rust (same style as
-            // sales::service::get_summary_by_product).
-            let cutoff = get_start_date(interval.clone());
-            let days = interval_days(&interval);
-
-            let sales_map: HashMap<String, f64> = {
-                use crate::schema::itevda::dsl as s;
-                let rows: Vec<(Option<String>, Option<f64>)> = s::itevda
-                    .filter(s::procod.eq_any(&codes))
-                    .filter(s::trndat.ge(cutoff))
-                    .select((s::procod, s::itvqtdvda))
-                    .load(&mut *conn)
-                    .map_err(|e| e.to_string())?;
-
-                let mut totals: HashMap<String, f64> = HashMap::new();
-                for (code, qty) in rows {
-                    if let Some(code) = code {
-                        *totals.entry(code).or_insert(0.0) += qty.unwrap_or(0.0);
-                    }
-                }
-                totals
-                    .into_iter()
-                    .map(|(code, total)| (code, total / days))
-                    .collect()
-            };
-
-            // 2d. Last purchase date — one raw query batched across all
-            // codes via a dynamically-bound IN (...) clause (BoxedSqlQuery
-            // supports binding a variable number of parameters in a loop).
+            // 2d. Last purchase date — one raw query batched across the
+            // page's codes via a dynamically-bound IN (...) clause
+            // (BoxedSqlQuery supports binding a variable number of
+            // parameters in a loop).
             let placeholders = codes.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
             let sql_text = format!(
                 "SELECT ie.PROCOD AS product_code, MAX(e.ENTDAT) AS last_purchase \
@@ -374,7 +475,10 @@ impl ShoppingListsApi for ShoppingListsImpl {
 
             let purchase_map: HashMap<String, NaiveDateTime> = purchase_rows
                 .into_iter()
-                .filter_map(|r| r.last_purchase.map(|d| (r.product_code, d)))
+                .filter_map(|r| {
+                    r.last_purchase
+                        .map(|d| (r.product_code.trim().to_string(), d))
+                })
                 .collect();
 
             // 2e. Per-supplier offers — for each (PROCOD, FORCOD) pair
@@ -385,7 +489,10 @@ impl ShoppingListsApi for ShoppingListsImpl {
             // 3.0) — "most recent line" is picked instead via two correlated
             // `SELECT FIRST 1 ... ORDER BY` scalar subqueries (ENTDOC/ITESEQ
             // as tiebreakers for same-timestamp entries), which Firebird 2.5
-            // supports. `codes` is bound once, for the single IN clause.
+            // supports. This fans out to O(page codes × suppliers) subquery
+            // executions, which is why it's scoped to just the current page
+            // instead of the whole list. `codes` is bound once, for the
+            // single IN clause.
             let supplier_placeholders = codes.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
             let supplier_sql_text = format!(
                 "SELECT \
@@ -427,7 +534,7 @@ impl ShoppingListsApi for ShoppingListsImpl {
                 HashMap::new();
             for row in supplier_rows {
                 supplier_offers_by_product
-                    .entry(row.product_code)
+                    .entry(row.product_code.trim().to_string())
                     .or_default()
                     .push(SupplierOffer {
                         supplier_code: row.supplier_code,
@@ -447,8 +554,8 @@ impl ShoppingListsApi for ShoppingListsImpl {
                 });
             }
 
-            // 3. Merge everything, one row per list item, preserving added_at order.
-            let result = items
+            // 3. Merge everything, one row per page item, preserving added_at order.
+            let result_items = page_items
                 .into_iter()
                 .map(|(item_id, code)| {
                     let stock_balance = stock_map.get(&code).copied();
@@ -463,12 +570,7 @@ impl ShoppingListsApi for ShoppingListsImpl {
                     let supplier_offers =
                         supplier_offers_by_product.remove(&code).unwrap_or_default();
 
-                    let suggested_purchase_qty = Some(
-                        (avg_daily_sales * target_stock_days as f64
-                            - stock_balance.unwrap_or(0.0))
-                        .max(0.0)
-                        .ceil(),
-                    );
+                    let suggested_purchase_qty = Some(suggestion_for(&code));
 
                     ShoppingListItemDetail {
                         item_id,
@@ -485,7 +587,10 @@ impl ShoppingListsApi for ShoppingListsImpl {
                 })
                 .collect();
 
-            Ok(result)
+            Ok(ShoppingListItemsPage {
+                items: result_items,
+                total,
+            })
         })
         .await
         .map_err(|e| e.to_string())?

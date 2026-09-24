@@ -33,6 +33,8 @@ export type ShoppingList = { id: number; name: string; created_at: string; item_
 
 export type ShoppingListItemDetail = { item_id: number; product_code: string; description: string | null; cost_price: number | null; sale_price: number | null; stock_balance: number | null; last_purchase_date: string | null; avg_daily_sales: number | null; suggested_purchase_qty: number | null; supplier_offers: SupplierOffer[] }
 
+export type ShoppingListItemsPage = { items: ShoppingListItemDetail[]; total: number }
+
 export type SimilarGroup = { id: string; description: string | null; products: SimilarProduct[] }
 
 /**
@@ -50,7 +52,7 @@ export type Stock = { product_code: string; quantity: number }
 
 export type SupplierOffer = { supplier_code: string; supplier_name: string | null; supplier_cnpj: string | null; last_purchase_date: string | null; last_unit_cost: number | null }
 
-const ARGS_MAP = { '':'{"connect_db":["args"],"disconnect_db":[],"hello_world":[],"is_connected":[],"load_connection_config":[],"load_preferences":[],"save_connection_config":["args"],"save_preferences":["prefs"]}', 'entries':'{"get_summary_by_product":["procod","interval"]}', 'products':'{"get_all":["filter"],"get_by_code":["procod"]}', 'sales':'{"get_summary_by_product":["procod","interval"]}', 'shopping_lists':'{"add_item":["list_id","product_code"],"create_list":["name"],"delete_list":["id"],"export_file":["path","data"],"get_list_items":["list_id","interval","target_stock_days"],"get_lists":[],"get_purchase_parameters":[],"remove_item":["item_id"],"rename_list":["id","name"],"save_purchase_parameters":["params"]}', 'similar':'{"get_by_product":["procod","include_stock","out_of_line"]}', 'stock':'{"get_by_product":["procod"]}' }
+const ARGS_MAP = { '':'{"connect_db":["args"],"disconnect_db":[],"hello_world":[],"is_connected":[],"load_connection_config":[],"load_preferences":[],"save_connection_config":["args"],"save_preferences":["prefs"]}', 'entries':'{"get_summary_by_product":["procod","interval"]}', 'products':'{"get_all":["filter"],"get_by_code":["procod"]}', 'sales':'{"get_summary_by_product":["procod","interval"]}', 'shopping_lists':'{"add_item":["list_id","product_code"],"create_list":["name"],"delete_list":["id"],"export_file":["path","data"],"get_list_items":["list_id","interval","target_stock_days","only_suggested","limit","offset"],"get_lists":[],"get_purchase_parameters":[],"remove_item":["item_id"],"rename_list":["id","name"],"save_purchase_parameters":["params"]}', 'similar':'{"get_by_product":["procod","include_stock","out_of_line"]}', 'stock':'{"get_by_product":["procod"]}' }
 export type Router = { "": {connect_db: (args: DbConnectionArgs) => Promise<null>, 
 disconnect_db: () => Promise<void>, 
 hello_world: () => Promise<string>, 
@@ -67,7 +69,7 @@ get_by_code: (procod: string) => Promise<Product | null>},
 create_list: (name: string) => Promise<ShoppingList>, 
 delete_list: (id: number) => Promise<null>, 
 export_file: (path: string, data: number[]) => Promise<null>, 
-get_list_items: (listId: number, interval: Interval, targetStockDays: number) => Promise<ShoppingListItemDetail[]>, 
+get_list_items: (listId: number, interval: Interval, targetStockDays: number, onlySuggested: boolean, limit: number, offset: number) => Promise<ShoppingListItemsPage>, 
 get_lists: () => Promise<ShoppingList[]>, 
 get_purchase_parameters: () => Promise<PurchaseParameters | null>, 
 remove_item: (itemId: number) => Promise<null>, 
