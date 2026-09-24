@@ -135,6 +135,22 @@ const fmtDate = (iso: string | null) => {
   return `${d}/${m}/${y}`;
 };
 
+// Converte "YYYY-MM-DD" em Date local (meio-dia evitado: usamos os
+// componentes diretos para não sofrer o offset de fuso que `new Date(iso)`
+// introduz ao interpretar a string como UTC), para que o Excel reconheça a
+// célula como data de verdade em vez de texto.
+const parseIsoDate = (iso: string | null): Date | null => {
+  if (!iso) return null;
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+
+// Formatos numéricos do export XLSX: valores monetários com 2 casas,
+// quantidades com 3 e datas como célula de data de verdade (não texto).
+const XLSX_FMT_VALUE = "#,##0.00";
+const XLSX_FMT_QTY = "#,##0.000";
+const XLSX_FMT_DATE = "dd/mm/yyyy";
+
 // Fornecedor com o menor preço de compra conhecido para o item (ignora
 // ofertas sem preço registrado em ITEM_ENTRADA).
 const getCheapestOffer = (item: ShoppingListItemDetail) =>
@@ -512,6 +528,21 @@ export function ShoppingList() {
         ...TRAILING_XLSX_HEADERS.map(() => ({ width: 14 })),
       ];
 
+      // `numFmt` só é respeitado quando setado via `getColumn(n).numFmt`
+      // depois de `sheet.columns` — colocá-lo dentro do array de columns
+      // acima é ignorado pelo ExcelJS.
+      sheet.getColumn(3).numFmt = XLSX_FMT_VALUE; // Preço de Custo
+      sheet.getColumn(4).numFmt = XLSX_FMT_VALUE; // Preço de Venda
+      sheet.getColumn(5).numFmt = XLSX_FMT_QTY; // Saldo
+      sheet.getColumn(6).numFmt = XLSX_FMT_DATE; // Última Compra
+      sheet.getColumn(7).numFmt = XLSX_FMT_QTY; // Venda Média Diária
+      sheet.getColumn(8).numFmt = XLSX_FMT_QTY; // Sugestão de Compra
+      supplierNames.forEach((_, i) => {
+        const priceCol = EXPORT_HEADERS.length + i * 2 + 1;
+        sheet.getColumn(priceCol).numFmt = XLSX_FMT_VALUE;
+        sheet.getColumn(priceCol + 1).numFmt = XLSX_FMT_DATE;
+      });
+
       // Linha 1 — banner com data/hora de geração, mesclado em todas as colunas.
       const bannerRow = sheet.addRow([fmtGeneratedAt()]);
       sheet.mergeCells(1, 1, 1, allHeaders.length);
@@ -538,7 +569,10 @@ export function ShoppingList() {
         );
         const supplierCells = supplierNames.flatMap((name) => {
           const offer = offersByName.get(name);
-          return [offer?.last_unit_cost ?? "", offer?.last_purchase_date ?? ""];
+          return [
+            offer?.last_unit_cost ?? "",
+            parseIsoDate(offer?.last_purchase_date ?? null) ?? "",
+          ];
         });
 
         sheet.addRow([
@@ -547,7 +581,7 @@ export function ShoppingList() {
           item.cost_price ?? "",
           item.sale_price ?? "",
           item.stock_balance ?? "",
-          item.last_purchase_date ?? "",
+          parseIsoDate(item.last_purchase_date) ?? "",
           item.avg_daily_sales ?? "",
           item.suggested_purchase_qty ?? 0,
           ...supplierCells,
