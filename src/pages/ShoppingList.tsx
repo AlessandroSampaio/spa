@@ -327,10 +327,23 @@ export function ShoppingList() {
 
   // ── Export ────────────────────────────────────────────────────────────────
   const [exportError, setExportError] = createSignal("");
-  const [exportProgress, setExportProgress] = createSignal<{
-    done: number;
-    total: number;
-  } | null>(null);
+
+  // Fases do export: "fetching" cobre a busca paginada da lista inteira,
+  // "generating" a montagem do PDF/XLSX em memória e "saving" a escrita do
+  // arquivo em disco — cada uma pode levar um tempo perceptível em listas
+  // grandes, então o usuário precisa ver qual delas está em andamento.
+  type ExportStatus =
+    | { phase: "fetching"; done: number; total: number }
+    | { phase: "generating" }
+    | { phase: "saving" };
+
+  const [exportingType, setExportingType] = createSignal<
+    "pdf" | "xlsx" | null
+  >(null);
+  const [exportStatus, setExportStatus] = createSignal<ExportStatus | null>(
+    null,
+  );
+  const isExporting = createMemo(() => exportingType() !== null);
 
   // Exportação cobre a lista inteira (filtrada por "somente sugestão > 0"
   // quando ativo), não só a página atual — busca em lotes sequenciais para
@@ -353,7 +366,11 @@ export function ShoppingList() {
         offset,
       );
       collected.push(...chunk.items);
-      setExportProgress({ done: collected.length, total: chunk.total });
+      setExportStatus({
+        phase: "fetching",
+        done: collected.length,
+        total: chunk.total,
+      });
       offset += EXPORT_CHUNK;
       if (chunk.items.length === 0 || collected.length >= chunk.total) break;
     }
@@ -383,9 +400,10 @@ export function ShoppingList() {
 
   const handleExportPdf = async () => {
     const list = selectedList();
-    if (!list || totalCount() === 0) return;
+    if (!list || totalCount() === 0 || isExporting()) return;
 
     setExportError("");
+    setExportingType("pdf");
     try {
       const path = await save({
         defaultPath: `${list.name}.pdf`,
@@ -393,9 +411,11 @@ export function ShoppingList() {
       });
       if (!path) return;
 
-      setExportProgress({ done: 0, total: totalCount() });
+      setExportStatus({ phase: "fetching", done: 0, total: totalCount() });
       const items = await fetchAllItemsForExport();
       if (items.length === 0) return;
+
+      setExportStatus({ phase: "generating" });
 
       // Loaded on demand — jsPDF/autoTable are only needed when exporting.
       const [{ jsPDF }, { default: autoTable }] = await Promise.all([
@@ -429,19 +449,23 @@ export function ShoppingList() {
       });
 
       const bytes = new Uint8Array(doc.output("arraybuffer"));
+
+      setExportStatus({ phase: "saving" });
       await taurpc.shopping_lists.export_file(path, Array.from(bytes));
     } catch (err) {
       setExportError(String(err));
     } finally {
-      setExportProgress(null);
+      setExportStatus(null);
+      setExportingType(null);
     }
   };
 
   const handleExportXlsx = async () => {
     const list = selectedList();
-    if (!list || totalCount() === 0) return;
+    if (!list || totalCount() === 0 || isExporting()) return;
 
     setExportError("");
+    setExportingType("xlsx");
     try {
       const path = await save({
         defaultPath: `${list.name}.xlsx`,
@@ -449,9 +473,11 @@ export function ShoppingList() {
       });
       if (!path) return;
 
-      setExportProgress({ done: 0, total: totalCount() });
+      setExportStatus({ phase: "fetching", done: 0, total: totalCount() });
       const items = await fetchAllItemsForExport();
       if (items.length === 0) return;
+
+      setExportStatus({ phase: "generating" });
 
       // Loaded on demand — exceljs is only needed when exporting.
       const ExcelJS = (await import("exceljs")).default;
@@ -530,6 +556,8 @@ export function ShoppingList() {
       }
 
       const buffer = await workbook.xlsx.writeBuffer();
+
+      setExportStatus({ phase: "saving" });
       await taurpc.shopping_lists.export_file(
         path,
         Array.from(new Uint8Array(buffer)),
@@ -537,7 +565,8 @@ export function ShoppingList() {
     } catch (err) {
       setExportError(String(err));
     } finally {
-      setExportProgress(null);
+      setExportStatus(null);
+      setExportingType(null);
     }
   };
 
@@ -735,18 +764,18 @@ export function ShoppingList() {
                 <div class="flex shrink-0 items-center gap-1.5">
                   <button
                     onClick={handleExportPdf}
-                    disabled={totalCount() === 0}
+                    disabled={totalCount() === 0 || isExporting()}
                     class="flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
                   >
-                    <IconDownload />
+                    {exportingType() === "pdf" ? <IconSpinner /> : <IconDownload />}
                     PDF
                   </button>
                   <button
                     onClick={handleExportXlsx}
-                    disabled={totalCount() === 0}
+                    disabled={totalCount() === 0 || isExporting()}
                     class="flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
                   >
-                    <IconDownload />
+                    {exportingType() === "xlsx" ? <IconSpinner /> : <IconDownload />}
                     XLSX
                   </button>
                 </div>
@@ -758,10 +787,21 @@ export function ShoppingList() {
                 </p>
               </Show>
 
-              <Show when={exportProgress()}>
-                {(p) => (
-                  <p class="-mt-2 px-1 text-xs text-gray-400 dark:text-gray-500">
-                    Exportando… {p().done}/{p().total}
+              <Show when={exportStatus()}>
+                {(status) => (
+                  <p class="-mt-2 flex items-center gap-1.5 px-1 text-xs text-gray-400 dark:text-gray-500">
+                    <IconSpinner />
+                    {(() => {
+                      const s = status();
+                      switch (s.phase) {
+                        case "fetching":
+                          return `Buscando itens… ${s.done}/${s.total}`;
+                        case "generating":
+                          return "Gerando arquivo…";
+                        case "saving":
+                          return "Salvando arquivo…";
+                      }
+                    })()}
                   </p>
                 )}
               </Show>
