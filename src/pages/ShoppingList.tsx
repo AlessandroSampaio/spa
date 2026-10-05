@@ -323,16 +323,32 @@ export function ShoppingList() {
     if (page() > maxPage) setPage(maxPage);
   });
 
+  // ── Custo estimado (lista inteira) ────────────────────────────────────────
+  // Buscado à parte da página: soma custo × sugestão de TODOS os itens da
+  // lista, então não depende de página nem do filtro "somente sugestão > 0"
+  // (itens sem sugestão contribuem com zero de qualquer forma).
+  const [costSummary, { refetch: refetchCostSummary }] = createResource(
+    () => {
+      const id = selectedListId();
+      if (id == null) return null;
+      return { id, iv: listInterval(), days: debouncedTargetStockDays() };
+    },
+    ({ id, iv, days }) =>
+      taurpc.shopping_lists.get_list_cost_summary(id, iv, days),
+  );
+
   const handleAddProduct = async (product: { procod: string }) => {
     const id = selectedListId();
     if (id == null) return;
     await taurpc.shopping_lists.add_item(id, product.procod);
+    refetchCostSummary();
     await refetchItems();
     await refetchLists();
   };
 
   const handleRemoveItem = async (itemId: number) => {
     await taurpc.shopping_lists.remove_item(itemId);
+    refetchCostSummary();
     await refetchItems();
     await refetchLists();
   };
@@ -964,6 +980,69 @@ export function ShoppingList() {
                       </div>
                     </div>
                   </Show>
+                </Show>
+
+                {/* Footer — custo estimado da lista inteira */}
+                <Show when={list().item_count > 0}>
+                  <div class="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-gray-100 bg-gray-50/60 px-5 py-3 text-xs dark:border-white/10 dark:bg-white/[0.02]">
+                    <Show
+                      when={!costSummary.loading && !costSummary.error && costSummary()}
+                      fallback={
+                        <span class="flex items-center gap-1.5 text-gray-400 dark:text-gray-500">
+                          <Show
+                            when={costSummary.error}
+                            fallback={
+                              <>
+                                <IconSpinner />
+                                Calculando custo estimado…
+                              </>
+                            }
+                          >
+                            <span class="text-red-500 dark:text-red-400">
+                              Falha ao calcular custo estimado:{" "}
+                              {String(costSummary.error)}
+                            </span>
+                          </Show>
+                        </span>
+                      }
+                    >
+                      {(summary) => (
+                        <>
+                          <div class="flex flex-col">
+                            <span class="text-gray-400 dark:text-gray-500">
+                              Itens com sugestão
+                            </span>
+                            <span class="tabular-nums font-medium text-gray-700 dark:text-gray-300">
+                              {summary().suggested_items}
+                            </span>
+                          </div>
+                          <div class="flex flex-col">
+                            <span class="text-gray-400 dark:text-gray-500">
+                              Unidades sugeridas
+                            </span>
+                            <span class="tabular-nums font-medium text-gray-700 dark:text-gray-300">
+                              {fmtNumber(summary().total_suggested_qty, 0)} un
+                            </span>
+                          </div>
+                          <Show when={summary().items_without_cost > 0}>
+                            <span class="rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                              {summary().items_without_cost} item
+                              {summary().items_without_cost !== 1 ? "s" : ""} sem
+                              preço de custo (fora do total)
+                            </span>
+                          </Show>
+                          <div class="ml-auto flex flex-col items-end">
+                            <span class="text-gray-400 dark:text-gray-500">
+                              Custo estimado da compra
+                            </span>
+                            <span class="tabular-nums text-base font-semibold text-gray-800 dark:text-gray-100">
+                              {fmtCurrency(summary().estimated_cost)}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </Show>
+                  </div>
                 </Show>
               </Card>
             </>

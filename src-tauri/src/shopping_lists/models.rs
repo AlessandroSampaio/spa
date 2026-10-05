@@ -32,6 +32,18 @@ pub struct ShoppingListItemsPage {
     pub total: i32,
 }
 
+// Resumo de custo estimado da lista inteira (não só da página atual):
+// somatório de preço de custo × sugestão de compra.
+#[taurpc::ipc_type]
+pub struct ShoppingListCostSummary {
+    pub estimated_cost: f64,
+    pub total_suggested_qty: f64,
+    // Itens com sugestão > 0.
+    pub suggested_items: i32,
+    // Itens com sugestão > 0 mas sem preço de custo — ficam fora do total.
+    pub items_without_cost: i32,
+}
+
 #[taurpc::ipc_type]
 pub struct SupplierOffer {
     pub supplier_code: String,

@@ -11,7 +11,7 @@ use diesel::{
 
 use super::models::{
     LastPurchaseRow, NewShoppingListItemRow, NewShoppingListRow, PurchaseParameters,
-    ShoppingList, ShoppingListItemDetail, ShoppingListItemsPage, ShoppingListRow, SupplierOffer,
+    ShoppingList, ShoppingListCostSummary, ShoppingListItemDetail, ShoppingListItemsPage, ShoppingListRow, SupplierOffer,
     SupplierOfferRow,
 };
 use crate::db::DbPool;
@@ -97,6 +97,11 @@ pub trait ShoppingListsApi {
         limit: i32,
         offset: i32,
     ) -> Result<ShoppingListItemsPage, String>;
+    async fn get_list_cost_summary(
+        list_id: i32,
+        interval: Interval,
+        target_stock_days: i32,
+    ) -> Result<ShoppingListCostSummary, String>;
     async fn get_purchase_parameters() -> Result<Option<PurchaseParameters>, String>;
     async fn save_purchase_parameters(params: PurchaseParameters) -> Result<(), String>;
     async fn export_file(path: String, data: Vec<u8>) -> Result<(), String>;
@@ -591,6 +596,102 @@ impl ShoppingListsApi for ShoppingListsImpl {
                 items: result_items,
                 total,
             })
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    }
+
+    // Separate from `get_list_items` so the (whole-list, expensive) stock/sales
+    // scan doesn't delay rendering of the paginated table — the frontend
+    // loads this summary independently for the footer.
+    async fn get_list_cost_summary(
+        self,
+        list_id_arg: i32,
+        interval: Interval,
+        target_stock_days: i32,
+    ) -> Result<ShoppingListCostSummary, String> {
+        let local_pool = self
+            .local_db
+            .get()
+            .ok_or("Banco de dados local não disponível")?
+            .clone();
+
+        let codes: Vec<String> = tokio::task::spawn_blocking(
+            move || -> Result<Vec<String>, String> {
+                use crate::local_schema::shopping_list_items::dsl::*;
+
+                let mut conn = local_pool.get().map_err(|e| e.to_string())?;
+                shopping_list_items
+                    .filter(list_id.eq(list_id_arg))
+                    .select(product_code)
+                    .load::<String>(&mut conn)
+                    .map_err(|e| e.to_string())
+            },
+        )
+        .await
+        .map_err(|e| e.to_string())??
+        .into_iter()
+        .map(|code| code.trim().to_string())
+        .collect();
+
+        let empty = ShoppingListCostSummary {
+            estimated_cost: 0.0,
+            total_suggested_qty: 0.0,
+            suggested_items: 0,
+            items_without_cost: 0,
+        };
+        if codes.is_empty() {
+            return Ok(empty);
+        }
+
+        let fb_pool = self
+            .db
+            .lock()
+            .await
+            .as_ref()
+            .ok_or("Sem conexão com o banco de dados")?
+            .clone();
+
+        tokio::task::spawn_blocking(move || -> Result<ShoppingListCostSummary, String> {
+            let mut conn = fb_pool.get().map_err(|e| e.to_string())?;
+
+            let cutoff = get_start_date(interval.clone());
+            let days = interval_days(&interval);
+
+            let stock_map = query_stock_map(&mut conn, &codes)?;
+            let sales_map = query_sales_map(&mut conn, &codes, cutoff, days)?;
+
+            let cost_map: HashMap<String, Option<f64>> = {
+                use crate::schema::produto::dsl as p;
+                p::produto
+                    .filter(p::procod.eq_any(&codes))
+                    .select((p::procod, p::proprccst))
+                    .load::<(String, Option<f64>)>(&mut *conn)
+                    .map_err(|e| e.to_string())?
+                    .into_iter()
+                    .map(|(code, cost)| (code.trim().to_string(), cost))
+                    .collect()
+            };
+
+            let mut summary = empty;
+            for code in &codes {
+                let stock_balance = stock_map.get(code).copied().unwrap_or(0.0);
+                let avg_daily_sales = sales_map.get(code).copied().unwrap_or(0.0);
+                let suggestion = (avg_daily_sales * target_stock_days as f64 - stock_balance)
+                    .max(0.0)
+                    .ceil();
+                if suggestion <= 0.0 {
+                    continue;
+                }
+
+                summary.suggested_items += 1;
+                summary.total_suggested_qty += suggestion;
+                match cost_map.get(code).copied().flatten() {
+                    Some(cost) => summary.estimated_cost += cost * suggestion,
+                    None => summary.items_without_cost += 1,
+                }
+            }
+            Ok(summary)
         })
         .await
         .map_err(|e| e.to_string())?
