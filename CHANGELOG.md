@@ -5,6 +5,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/)
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-10-06
+## Fixed
+- Correção do calculo de preco de custo
+
 ## [1.4.1] - 2026-10-06
 ## Added
 - Adicionado totalização a pagina de carrinho de compras
