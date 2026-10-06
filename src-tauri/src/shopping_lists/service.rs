@@ -497,7 +497,9 @@ impl ShoppingListsApi for ShoppingListsImpl {
             // supports. This fans out to O(page codes × suppliers) subquery
             // executions, which is why it's scoped to just the current page
             // instead of the whole list. `codes` is bound once, for the
-            // single IN clause.
+            // single IN clause. ITEVLREMB is the price of ONE package
+            // (ITEVLREMB × ITEQTDEMB ≈ ITEVLRTOT), so the unit cost is
+            // ITEVLREMB / ITEUNIEMB — not divided by the package count.
             let supplier_placeholders = codes.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
             let supplier_sql_text = format!(
                 "SELECT \
@@ -513,7 +515,7 @@ impl ShoppingListsApi for ShoppingListsImpl {
                        WHERE ie.PROCOD = pf.PROCOD AND ie.FORCOD = pf.FORCOD \
                        ORDER BY e.ENTDATEMI DESC, e.ENTDOC DESC, ie.ITESEQ DESC \
                      ) AS last_purchase_date, \
-                     (SELECT FIRST 1 ie.ITEVLREMB / NULLIF(ie.ITEQTDEMB * ie.ITEUNIEMB, 0) \
+                     (SELECT FIRST 1 ie.ITEVLREMB / NULLIF(ie.ITEUNIEMB, 0) \
                         FROM ITEM_ENTRADA ie \
                         INNER JOIN ENTRADA e \
                                 ON e.FORCOD = ie.FORCOD AND e.ENTSER = ie.ENTSER \
